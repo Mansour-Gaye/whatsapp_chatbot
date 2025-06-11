@@ -5,15 +5,15 @@ python-dotenv
 gunicorn
 
 # --- Langchain ---
-langchain==0.2.1
-langchain-core==0.2.52
-langchain-groq==0.3.2
+langchain
+langchain-core
+langchain-groq
 
 # --- Modules nécessaires pour lead_graph.py ---
 langchain-google-community
 langchain-huggingface
 langchain-community
-pydantic==2.5.3
+pydantic
 
 # --- Embeddings ---
 faiss-cpu
