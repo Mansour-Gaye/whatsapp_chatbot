@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: whatsapp-chatbot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: credentials.json
+      - key: TOKEN_PATH
+        value: token.json 
