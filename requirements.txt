@@ -16,6 +16,7 @@ langchain-google-community[drive]
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
+langchain_huggingface
 
 # --- Embeddings/Vector Stores ---
 faiss-cpu
