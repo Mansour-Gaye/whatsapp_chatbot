@@ -10,7 +10,7 @@ langchain-core
 langchain-community
 langchain-groq
 langchain-google-community[drive]
-langchain-huggingface
+
 
 # --- Google Drive/Cloud ---
 google-api-python-client
@@ -19,7 +19,7 @@ google-auth-httplib2
 
 # --- Embeddings/Vector Stores ---
 faiss-cpu
-sentence-transformers
+
 
 # --- Data Models ---
 pydantic
