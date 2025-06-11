@@ -5,7 +5,6 @@ import hashlib
 import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from . import lead_graph  # Import relatif
 from lead_graph import (
     collect_lead, 
     Lead, 
