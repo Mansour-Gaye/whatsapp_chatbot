@@ -4,7 +4,9 @@ from pydantic import BaseModel, Field
 import csv
 import os
 import sqlite3
-
+from googleapiclient.http import MediaIoBaseUpload
+import io
+from gdrive_utils import get_drive_service  
 from langchain_google_community import GoogleDriveLoader
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -71,10 +73,45 @@ def save_lead_to_sqlite(lead: Lead, db_path=None):
     conn.commit()
     conn.close()
 
+def save_lead_to_drive(lead: Lead):
+    """Sauvegarde le lead dans Google Drive sous forme de fichier texte"""
+    try:
+        drive = get_drive_service()
+        
+        file_metadata = {
+            'name': f"lead_{lead.phone}.txt",
+            'mimeType': 'text/plain',
+            'parents': [os.getenv('GOOGLE_DRIVE_FOLDER_ID')]  # Optionnel : dossier spécifique
+        }
+        
+        content = f"""Nom: {lead.name}
+Email: {lead.email}
+Téléphone: {lead.phone}
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
+        
+        media = MediaIoBaseUpload(
+            io.BytesIO(content.encode('utf-8')),
+            mimetype='text/plain'
+        )
+        
+        file = drive.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        print(f"[Google Drive] Lead sauvegardé (ID: {file.get('id')})")
+        return file
+        
+    except Exception as e:
+        print(f"[Google Drive] Erreur : {str(e)}")
+        return None
+        
 def collect_lead_from_text(text: str) -> Lead:
     lead = structured_llm.invoke(text)
     save_lead_to_csv(lead)
     save_lead_to_sqlite(lead)
+    save_lead_to_drive(lead)  # Nouvelle fonctionnalité
     return lead
 
 # ✅ RAG setup
