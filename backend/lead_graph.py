@@ -1,12 +1,11 @@
-from typing import Annotated, List
-from langgraph.graph import StateGraph, END
+
 from langchain_groq import ChatGroq
-from langgraph.graph.message import add_messages
+
 from pydantic import BaseModel, Field
 import csv
 import os
 import sqlite3
-from langgraph.checkpoint.sqlite import SqliteSaver
+
 from langchain_google_community import GoogleDriveLoader
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -81,16 +80,13 @@ def save_lead_to_sqlite(lead: Lead, db_path=None):
     conn.commit()
     conn.close()
 
-def collect_lead(state: State):
-    user_message = state["messages"][-1]["content"]
-    lead = structured_llm.invoke(user_message)
+def collect_lead_from_text(text: str) -> Lead:
+    """Extrait un lead à partir d’un message utilisateur"""
+    lead = structured_llm.invoke(text)
     save_lead_to_csv(lead)
     save_lead_to_sqlite(lead)
-    return {
-        "messages": state["messages"] + [{"role": "system", "content": str(lead)}],
-        "lead": lead.model_dump(),
-        "thread_id": state["thread_id"]
-    }
+    return lead
+
 
 # Création du graphe
 graph = StateGraph(State)
@@ -207,30 +203,7 @@ def setup_rag():
 rag_chain = setup_rag()
 
 if __name__ == "__main__":
-    initial_state = {
-        "messages": [{
-            "role": "user",
-            "content": "Bonjour, je m'appelle Alice Martin. Vous pouvez me joindre à alice.martin@email.com ou au 06 12 34 56 78."
-        }],
-        "thread_id": "test-thread-001"
-    }
+    input_text = "Bonjour, je m'appelle Alice Martin. Vous pouvez me joindre à alice.martin@email.com ou au 06 12 34 56 78."
+    lead = collect_lead_from_text(input_text)
+    print("Lead structuré extrait :", lead)
 
-    # ⛏️ Important : compiler le graphe à l'intérieur du bloc `with`
-    with SqliteSaver.from_conn_string(os.path.join(os.path.dirname(__file__), "leads.sqlite")) as saver:
-        runnable = graph.compile(checkpointer=saver, debug=True)
-        result = runnable.invoke(initial_state, config={"configurable": {"thread_id": initial_state["thread_id"]}})
-        
-        # ...après l'appel à invoke
-        if hasattr(result, "items"):
-            state_values = dict(result.items())
-        else:
-            state_values = result
-
-        last_message = state_values["messages"][-1]["content"]
-        print("Lead structuré extrait :", last_message)
-
-        lead_data = state_values.get("lead")
-        if lead_data:
-            lead = Lead(**lead_data)
-            save_lead_to_csv(lead)
-            save_lead_to_sqlite(lead)
