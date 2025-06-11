@@ -1,17 +1,8 @@
-from google.oauth2 import service_account
+# gdrive_utils.py
+from googleapiclient.discovery import build
+from get_credentials import get_credentials  # Importez votre fonction existante
 
-SCOPES = [
-    'https://www.googleapis.com/auth/drive.readonly',
-    'https://www.googleapis.com/auth/documents.readonly'
-]
-
-def get_credentials():
-    credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-    if not credentials_path or not os.path.exists(credentials_path):
-        raise FileNotFoundError("Fichier de credentials du compte de service non trouvé.")
-    creds = service_account.Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
-    return creds
-
-
-if __name__ == '__main__':
-    get_credentials()
+def get_drive_service():
+    creds = get_credentials()  # Utilise la fonction qui charge les credentials depuis Render
+    service = build('drive', 'v3', credentials=creds)
+    return service
