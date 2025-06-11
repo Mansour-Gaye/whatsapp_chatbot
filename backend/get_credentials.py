@@ -3,6 +3,7 @@ from google.oauth2 import service_account
 SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/documents.readonly'
+    'https://www.googleapis.com/auth/drive.file',
 ]
 
 def get_credentials():
