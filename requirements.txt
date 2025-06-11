@@ -15,4 +15,7 @@ werkzeug==2.2.3
 langchain-core==0.1.53
 langsmith==0.1.16
 langgraph==0.0.30
+langchain-groq==0.3.2
+groq==0.26.0
+
 
