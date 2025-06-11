@@ -7,17 +7,26 @@ gunicorn
 # --- Langchain ---
 langchain
 langchain-core
-langchain-google-community[drive]
-langchain-groq
-
-# --- Modules nécessaires pour lead_graph.py ---
-langchain-google-community
-langchain-huggingface
 langchain-community
+langchain-groq
+langchain-google-community[drive]
+langchain-huggingface
+
+# --- Google Drive/Cloud ---
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+
+# --- Embeddings/Vector Stores ---
+faiss-cpu
+sentence-transformers
+
+# --- Data Models ---
 pydantic
 
-# --- Embeddings ---
-faiss-cpu
+# --- Utilitaires ---
+requests
+sqlite3
 
 
 
