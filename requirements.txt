@@ -26,9 +26,6 @@ pydantic
 
 # --- Utilitaires ---
 requests
-sqlite3
-
-
 
 
 
