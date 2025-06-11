@@ -7,6 +7,7 @@ gunicorn
 # --- Langchain ---
 langchain
 langchain-core
+langchain-google-community[drive]
 langchain-groq
 
 # --- Modules nécessaires pour lead_graph.py ---
