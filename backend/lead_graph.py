@@ -122,7 +122,7 @@ def load_documents():
     try:
         loader = GoogleDriveLoader(
             folder_id=FOLDER_ID,
-            credentials_path='/etc/secrets/credentials.json',  # Chemin explicite
+            credentials_path=os.getenv('GOOGLE_APPLICATION_CREDENTIALS') ,  # Chemin explicite
             file_types=["document", "pdf", "sheet"],
             recursive=True
         )
