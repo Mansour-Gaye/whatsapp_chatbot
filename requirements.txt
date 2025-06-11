@@ -11,15 +11,15 @@ gunicorn==20.1.0
 werkzeug==2.2.3
 
 # Langchain écosystème avec langgraph
-langchain==0.1.14
-langchain-core==0.1.53
+langchain
+langchain-core
 
-langchain-groq==0.1.6
+langchain-groq
 
 flask
 flask-cors
 python-dotenv
-pydantic==2.5.3
+pydantic
 
 
 
