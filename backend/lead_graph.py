@@ -17,7 +17,7 @@ from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
 
 # Configuration du cache
-langchain.llm_cache = SQLiteCache(database_path=".langchain.db")
+langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 memory_cache = InMemoryCache()
 
 # Initialisation du cache pour les embeddings
@@ -63,7 +63,9 @@ def save_lead_to_csv(lead: Lead, filename=None):
             writer.writeheader()
         writer.writerow({"name": lead.name, "email": lead.email, "phone": lead.phone})
 
-def save_lead_to_sqlite(lead: Lead, db_path="leads.db"):
+def save_lead_to_sqlite(lead: Lead, db_path=None):
+    if db_path is None:
+        db_path = os.path.join(os.path.dirname(__file__), "leads.db")
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("""
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     }
 
     # ⛏️ Important : compiler le graphe à l'intérieur du bloc `with`
-    with SqliteSaver.from_conn_string("leads.sqlite") as saver:
+    with SqliteSaver.from_conn_string(os.path.join(os.path.dirname(__file__), "leads.sqlite")) as saver:
         runnable = graph.compile(checkpointer=saver, debug=True)
         result = runnable.invoke(initial_state, config={"configurable": {"thread_id": initial_state["thread_id"]}})
         

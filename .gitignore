@@ -1,1 +1,49 @@
- 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Fichiers sensibles
+token.json
+credentials.json
+.env
+
+# Base de données
+*.db
+*.sqlite
+*.sqlite3
+.langchain.db
+
+# Logs
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
