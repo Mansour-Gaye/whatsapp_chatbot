@@ -17,7 +17,7 @@ except ImportError:
         return None
 
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+from jina_embeddings import JinaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.cache import SQLiteCache
 import langchain
@@ -30,7 +30,7 @@ from langchain_core.documents import Document
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
 
-def get_cached_embeddings(text: str, embeddings: OpenAIEmbeddings) -> List[float]:
+def get_cached_embeddings(text: str, embeddings: JinaEmbeddings) -> List[float]:
     cache_key = f"embed_{hash(text)}"
     if cache_key in embedding_cache: return embedding_cache[cache_key]
     embedding = embeddings.embed_query(text)
@@ -129,8 +129,9 @@ def setup_rag():
         return None
     
     try:
-        embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-        print("[LEAD_GRAPH_SETUP_RAG] OpenAI Embeddings loaded.")
+        # Utiliser Jina Embeddings
+        embeddings = JinaEmbeddings()
+        print("[LEAD_GRAPH_SETUP_RAG] Jina Embeddings loaded.")
         
         vectorstore = FAISS.from_documents(docs, embeddings) 
         print("[LEAD_GRAPH_SETUP_RAG] FAISS vector store created.")
