@@ -206,7 +206,7 @@ def send_whatsapp_message(to_number: str, message_text: str):
     except Exception as e:
         print(f"[WHATSAPP_SEND] Unexpected exception for {to_number}: '{e}'\n{traceback.format_exc()}") # Corrected f-string
         return {"error": "Unexpected server error."}
-2. backend/lead_graph.py (from Turn 57 - Google Drive saving commented out, attempts folder load):
+# 2. backend/lead_graph.py (from Turn 57 - Google Drive saving commented out, attempts folder load):
 
 from typing import List
 from langchain_groq import ChatGroq
