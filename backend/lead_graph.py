@@ -91,8 +91,8 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
 
     try:
-        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", "VOTRE_ID_DE_DOCUMENT")
-        print(f"[LEAD_GRAPH_INIT] Attempting to load new specific document ID: '{specific_doc_id}'")
+        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", ACTIVE_FOLDER_ID)
+        print(f"[LEAD_GRAPH_INIT] Attempting to load document ID: '{specific_doc_id}'")
         
         # Utiliser notre nouveau DriveLoader
         drive_loader = get_drive_loader()
@@ -112,11 +112,11 @@ def load_documents():
             metadata={"source": f"google_drive_{specific_doc_id}"}
         )
         
-        print(f"[LEAD_GRAPH_INIT] Successfully loaded document from Google Drive")
+        print(f"[LEAD_GRAPH_INIT] Successfully loaded document from Google Drive ({len(content)} caractères)")
         return [doc]
         
     except Exception as e:
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading document from Google Drive: '{e}'")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
         return []
 
