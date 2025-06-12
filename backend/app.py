@@ -11,7 +11,8 @@ app.register_blueprint(whatsapp, url_prefix='/whatsapp')
 def log_requests(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        app.logger.info(f"Requête reçue - {request.path} - Données: {request.get_json()}")
+        # Using print for now as app.logger might not be ready during initial imports
+        # print(f"[DEBUG] Request: {{request.path}}, Data: {{request.get_json(silent=True)}}")
         return f(*args, **kwargs)
     return decorated_function
 
@@ -30,6 +31,9 @@ def chat():
         }), 400
 
     try:
+        if llm is None:
+            print("[API_CHAT] LLM from lead_graph is None. Cannot process chat.")
+            raise Exception("LLM non configuré pour le chat.")
         response = llm.invoke({
             "history": history,
             "question": history[-1].get("content", ""),
@@ -41,10 +45,10 @@ def chat():
         })
     
     except Exception as e:
-        app.logger.error(f"Erreur dans /api/chat: {str(e)}")
+        print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
         return jsonify({
             "status": "error",
-            "response": "Désolé, une erreur s'est produite"
+            "response": "Désolé, une erreur s'est produite pendant la conversation."
         }), 500
 
 @app.route("/api/lead", methods=["POST"])
@@ -56,9 +60,13 @@ def lead():
     save_flag = data.get("save", False)
 
     try:
-        lead = structured_llm.invoke(user_input)
+        if structured_llm is None or collect_lead_from_text is None:
+            print("[API_LEAD] structured_llm or collect_lead_from_text from lead_graph is None.")
+            raise Exception("Composants de traitement de lead non configurés.")
+
+        lead_object = structured_llm.invoke(user_input) # Renamed variable
         
-        if not any([lead.name, lead.email, lead.phone]):
+        if not any([lead_object.name, lead_object.email, lead_object.phone]):
             return jsonify({
                 "status": "error",
                 "message": "Informations manquantes. Merci de fournir nom, email ou téléphone."
@@ -66,20 +74,21 @@ def lead():
 
         if save_flag:
             collect_lead_from_text(user_input)
-            # Sauvegarde supplémentaire dans Google Drive
-            from gdrive_utils import save_lead_to_drive
-            save_lead_to_drive(lead)
+            # Sauvegarde supplémentaire dans Google Drive (temporarily disabled for circular import diagnosis)
+            # from gdrive_utils import save_lead_to_drive
+            # save_lead_to_drive(lead_object)
+            print("[APP.PY] save_lead_to_drive call is temporarily disabled.")
 
         return jsonify({
             "status": "success",
-            "lead": lead.model_dump()
+            "lead": lead_object.model_dump()
         })
     
     except Exception as e:
-        app.logger.error(f"Erreur dans /api/lead: {str(e)}")
+        print(f"[API_LEAD] Erreur dans /api/lead: {str(e)}")
         return jsonify({
             "status": "error",
-            "message": f"Erreur lors du traitement: {e}"
+            "message": f"Erreur lors du traitement des informations de lead: {e}"
         }), 500
 
 # ---- Health Check ----
