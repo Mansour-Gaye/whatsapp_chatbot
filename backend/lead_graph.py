@@ -17,7 +17,7 @@ except ImportError:
         return None
 
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.cache import SQLiteCache
 import langchain
@@ -30,7 +30,7 @@ from langchain_core.documents import Document
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
 
-def get_cached_embeddings(text: str, embeddings: HuggingFaceEmbeddings) -> List[float]:
+def get_cached_embeddings(text: str, embeddings: OpenAIEmbeddings) -> List[float]:
     cache_key = f"embed_{hash(text)}"
     if cache_key in embedding_cache: return embedding_cache[cache_key]
     embedding = embeddings.embed_query(text)
@@ -129,8 +129,8 @@ def setup_rag():
         return None
     
     try:
-        embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2", model_kwargs={'device': 'cpu'})
-        print("[LEAD_GRAPH_SETUP_RAG] Embeddings loaded.")
+        embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+        print("[LEAD_GRAPH_SETUP_RAG] OpenAI Embeddings loaded.")
         
         vectorstore = FAISS.from_documents(docs, embeddings) 
         print("[LEAD_GRAPH_SETUP_RAG] FAISS vector store created.")
