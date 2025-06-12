@@ -10,8 +10,9 @@ from lead_graph import (
 #   collect_lead, 
     Lead, 
     structured_llm, 
-    rag_chain, 
-    llm,
+    # rag_chain, # Removed direct import
+    get_rag_chain, # Added for lazy loading
+    llm, # Renaming to base_llm_from_graph for clarity if needed, but llm is fine too
     save_lead_to_csv,
     save_lead_to_sqlite
 )
@@ -64,8 +65,41 @@ def process_message(message, phone_number):
 
     if step == 0:
         state["exchange_count"] += 1
+        current_rag_chain = get_rag_chain()
         # Appel à la chaîne RAG (comme sur le web)
-        response = rag_chain.invoke({
+        if current_rag_chain is None:
+            # Fallback response when RAG is not available
+            # We can use the general llm for a simple response if available and appropriate
+            # Or just a static message.
+            # For now, let's try a static message and also log this event.
+            print("[PROCESS_MESSAGE] current_rag_chain is None. Using fallback response.")
+            # Check if llm (the base ChatGroq model) is available from lead_graph
+            try:
+                # llm is already imported from lead_graph, can use it directly
+                if llm: # llm is imported as base_llm_from_graph or just llm
+                    # Simple invocation without RAG context
+                    fallback_ans = llm.invoke(f"Répondez de manière utile à la question suivante, même si vous n'avez pas de contexte spécifique: {message}").content
+                    history.append({"role": "assistant", "content": fallback_ans})
+                    return fallback_ans
+                else:
+                    # This case should ideally not happen if GROQ_API_KEY is set
+                    print("[PROCESS_MESSAGE] base_llm (llm) from lead_graph is also None. Critical LLM setup issue.")
+                    fallback_ans = "Je rencontre des difficultés techniques pour accéder à toutes mes fonctionnalités. Veuillez réessayer plus tard."
+                    history.append({"role": "assistant", "content": fallback_ans})
+                    return fallback_ans
+            except ImportError: # Should not happen if initial import worked
+                print("[PROCESS_MESSAGE] Could not import base_llm (llm) from lead_graph for fallback.")
+                fallback_ans = "Je ne parviens pas à accéder à mes informations pour le moment, mais je peux quand même discuter un peu."
+                history.append({"role": "assistant", "content": fallback_ans})
+                return fallback_ans
+            except Exception as e:
+                print(f"[PROCESS_MESSAGE] Error during fallback LLM invocation: {e}")
+                fallback_ans = "Je rencontre un problème technique pour élaborer une réponse complète actuellement."
+                history.append({"role": "assistant", "content": fallback_ans})
+                return fallback_ans
+
+        # Original RAG chain invocation (if current_rag_chain is not None)
+        response = current_rag_chain.invoke({
             "history": history,
             "question": message,
             "company_name": "TRANSLAB INTERNATIONAL",
@@ -111,7 +145,40 @@ def process_message(message, phone_number):
 
     else:
         # Chat normal après collecte
-        response = rag_chain.invoke({
+        current_rag_chain = get_rag_chain()
+        if current_rag_chain is None:
+            # Fallback response when RAG is not available
+            # We can use the general llm for a simple response if available and appropriate
+            # Or just a static message.
+            # For now, let's try a static message and also log this event.
+            print("[PROCESS_MESSAGE] current_rag_chain is None. Using fallback response.")
+            # Check if llm (the base ChatGroq model) is available from lead_graph
+            try:
+                # llm is already imported from lead_graph, can use it directly
+                if llm: # llm is imported as base_llm_from_graph or just llm
+                    # Simple invocation without RAG context
+                    fallback_ans = llm.invoke(f"Répondez de manière utile à la question suivante, même si vous n'avez pas de contexte spécifique: {message}").content
+                    history.append({"role": "assistant", "content": fallback_ans})
+                    return fallback_ans
+                else:
+                    # This case should ideally not happen if GROQ_API_KEY is set
+                    print("[PROCESS_MESSAGE] base_llm (llm) from lead_graph is also None. Critical LLM setup issue.")
+                    fallback_ans = "Je rencontre des difficultés techniques pour accéder à toutes mes fonctionnalités. Veuillez réessayer plus tard."
+                    history.append({"role": "assistant", "content": fallback_ans})
+                    return fallback_ans
+            except ImportError: # Should not happen if initial import worked
+                print("[PROCESS_MESSAGE] Could not import base_llm (llm) from lead_graph for fallback.")
+                fallback_ans = "Je ne parviens pas à accéder à mes informations pour le moment, mais je peux quand même discuter un peu."
+                history.append({"role": "assistant", "content": fallback_ans})
+                return fallback_ans
+            except Exception as e:
+                print(f"[PROCESS_MESSAGE] Error during fallback LLM invocation: {e}")
+                fallback_ans = "Je rencontre un problème technique pour élaborer une réponse complète actuellement."
+                history.append({"role": "assistant", "content": fallback_ans})
+                return fallback_ans
+
+        # Original RAG chain invocation (if current_rag_chain is not None)
+        response = current_rag_chain.invoke({
             "history": history,
             "question": message,
             "company_name": "TRANSLAB INTERNATIONAL",
@@ -153,11 +220,11 @@ def webhook():
                             
                             if 'text' in message:
                                 message_body = message['text']['body']
-                                print(f"[WEBHOOK] Contenu du message: {message_body}")
+                                print(f'[WEBHOOK_POST] Processing text message from {from_number}: "{message_body}"')
                                 
                                 # Passer le numéro de téléphone à process_message
                                 response = process_message(message_body, from_number)
-                                print(f"[WEBHOOK] Réponse générée: {response}")
+                                print(f'[WEBHOOK_POST] Generated response for {from_number}: "{response_text}"')
                                 
                                 result = send_whatsapp_message(from_number, response)
                                 print(f"[WEBHOOK] Résultat de l'envoi: {json.dumps(result, indent=2)}")
@@ -185,6 +252,7 @@ def send_whatsapp_message(to_number, message):
         "text": {"body": message}
     }
     
+    print(f'[WHATSAPP_SEND] To {to_number}: "{message}"') # Added corrected log line
     print(f"[WHATSAPP] Envoi du message à {to_number}")
     print(f"[WHATSAPP] URL: {url}")
     print(f"[WHATSAPP] Headers: {json.dumps(headers, indent=2)}")

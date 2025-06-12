@@ -66,9 +66,10 @@ def lead():
 
         if save_flag:
             collect_lead_from_text(user_input)
-            # Sauvegarde supplémentaire dans Google Drive
-            from gdrive_utils import save_lead_to_drive
-            save_lead_to_drive(lead)
+            # Sauvegarde supplémentaire dans Google Drive (temporarily disabled for circular import diagnosis)
+            # from gdrive_utils import save_lead_to_drive
+            # save_lead_to_drive(lead)
+            print("[APP.PY] save_lead_to_drive call is temporarily disabled.") # Add a log
 
         return jsonify({
             "status": "success",
