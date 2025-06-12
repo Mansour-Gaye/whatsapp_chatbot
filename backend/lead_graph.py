@@ -25,6 +25,8 @@ import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
 from datetime import datetime 
+from drive_loader import get_drive_loader
+from langchain_core.documents import Document
 
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
@@ -90,34 +92,30 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
 
     try:
-        # Utilisez l'ID de votre document Google Drive ici
-        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", "VOTRE_ID_DE_DOCUMENT") 
+        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", "VOTRE_ID_DE_DOCUMENT")
         print(f"[LEAD_GRAPH_INIT] Attempting to load new specific document ID: '{specific_doc_id}'")
         
-        loader = GoogleDriveLoader(
-            service_account_key=creds_path,
-            document_ids=[specific_doc_id],
-            file_types=["pdf", "docx", "txt"]  # Ajout des types de fichiers supportés
+        # Utiliser notre nouveau DriveLoader
+        drive_loader = get_drive_loader()
+        if not drive_loader:
+            print("[LEAD_GRAPH_INIT] Failed to initialize DriveLoader")
+            return []
+            
+        # Récupérer le contenu du document
+        content = drive_loader.get_file_content(specific_doc_id)
+        if not content:
+            print(f"[LEAD_GRAPH_INIT] No content retrieved for document ID: '{specific_doc_id}'")
+            return []
+            
+        # Créer un document LangChain
+        doc = Document(
+            page_content=content,
+            metadata={"source": f"google_drive_{specific_doc_id}"}
         )
-        print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific document ID: '{specific_doc_id}'.")
         
-        # Vérification des permissions
-        try:
-            from google.oauth2 import service_account
-            from googleapiclient.discovery import build
-            credentials = service_account.Credentials.from_service_account_file(creds_path)
-            service = build('drive', 'v3', credentials=credentials)
-            file = service.files().get(fileId=specific_doc_id, fields='id, name').execute()
-            print(f"[LEAD_GRAPH_INIT] Successfully verified access to file: {file.get('name')}")
-        except Exception as e:
-            print(f"[LEAD_GRAPH_INIT] WARNING: Could not verify file access: {str(e)}")
+        print(f"[LEAD_GRAPH_INIT] Successfully loaded document from Google Drive")
+        return [doc]
         
-        docs = loader.load()
-        
-        print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
-        if not docs: 
-            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a supported type (PDF, DOCX, TXT). \n3. The service account has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
-        return docs
     except Exception as e:
         print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
@@ -200,6 +198,9 @@ if __name__ == "__main__":
         else:
             print("structured_llm is None, skipping lead extraction test.")
     except Exception as e: print(f"Error collecting lead: '{e}'")
+
+
+
 
 
 
