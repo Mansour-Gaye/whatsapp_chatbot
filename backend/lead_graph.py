@@ -16,7 +16,6 @@ except ImportError:
         print("Error: get_drive_service not available due to missing gdrive_utils (currently commented out).")
         return None
 
-from langchain_google_community import GoogleDriveLoader 
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
