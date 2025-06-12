@@ -33,37 +33,59 @@ class DriveLoader:
             logger.error(f"Erreur lors de l'initialisation du service: {str(e)}")
             raise
 
-    def get_file_content(self, file_id: str) -> Optional[str]:
-        """Récupère le contenu d'un fichier Google Drive.
-        
-        Args:
-            file_id: ID du fichier Google Drive
-            
-        Returns:
-            Contenu du fichier en texte ou None si erreur
-        """
+    def get_file_content(self, file_id: str) -> str:
+        """Récupère le contenu d'un fichier Google Drive."""
         try:
-            # Vérifier d'abord si le fichier existe et est accessible
-            file = self.service.files().get(fileId=file_id, fields='id, name, mimeType').execute()
-            logger.info(f"Fichier trouvé: {file.get('name')} ({file.get('mimeType')})")
-
-            # Télécharger le contenu
-            request = self.service.files().get_media(fileId=file_id)
-            fh = io.BytesIO()
-            downloader = MediaIoBaseDownload(fh, request)
-            done = False
-            while not done:
-                status, done = downloader.next_chunk()
-                logger.info(f"Téléchargement: {int(status.progress() * 100)}%")
-
-            # Convertir en texte
-            content = fh.getvalue().decode('utf-8')
-            logger.info(f"Contenu récupéré avec succès ({len(content)} caractères)")
-            return content
-
+            # Vérifier si c'est un dossier
+            file_metadata = self.service.files().get(fileId=file_id, fields='mimeType').execute()
+            mime_type = file_metadata.get('mimeType', '')
+            
+            if mime_type == 'application/vnd.google-apps.folder':
+                # Si c'est un dossier, lister et récupérer le contenu de tous les fichiers
+                results = self.service.files().list(
+                    q=f"'{file_id}' in parents and trashed=false",
+                    fields="files(id, name, mimeType)"
+                ).execute()
+                files = results.get('files', [])
+                
+                if not files:
+                    logger.warning(f"Aucun fichier trouvé dans le dossier {file_id}")
+                    return ""
+                
+                content = []
+                for file in files:
+                    file_content = self.get_file_content(file['id'])
+                    if file_content:
+                        content.append(f"=== {file['name']} ===\n{file_content}\n")
+                
+                return "\n".join(content)
+            
+            # Si c'est un document Google (Docs, Sheets, etc.)
+            elif mime_type.startswith('application/vnd.google-apps.'):
+                request = self.service.files().export_media(
+                    fileId=file_id,
+                    mimeType='text/plain'
+                )
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                return fh.getvalue().decode('utf-8')
+            
+            # Si c'est un fichier normal
+            else:
+                request = self.service.files().get_media(fileId=file_id)
+                fh = io.BytesIO()
+                downloader = MediaIoBaseDownload(fh, request)
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                return fh.getvalue().decode('utf-8')
+                
         except Exception as e:
-            logger.error(f"Erreur lors de la récupération du fichier {file_id}: {str(e)}")
-            return None
+            logger.error(f"Erreur lors de la récupération du fichier {file_id}: {e}")
+            return ""
 
     def list_files_in_folder(self, folder_id: str) -> List[dict]:
         """Liste les fichiers dans un dossier Google Drive.
