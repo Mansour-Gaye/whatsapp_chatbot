@@ -86,7 +86,7 @@ def save_lead_to_drive(lead: Lead):
         file_metadata = {
             'name': f"lead_{lead.phone}.txt",
             'mimeType': 'text/plain',
-            'parents': [os.getenv('GOOGLE_DRIVE_FOLDER_ID')]  # Optionnel : dossier spécifique
+            'parents': [os.getenv('GOOGLE_DRIVE_FOLDER_ID')]
         }
         
         content = f"""Nom: {lead.name}
@@ -120,7 +120,7 @@ def collect_lead_from_text(text: str) -> Lead:
     return lead
 
 # ✅ RAG setup
-FOLDER_ID = "1WiiFDmrTYRmnznkY0RkuYiSFLDxSzypI"
+FOLDER_ID = "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN"
 # TOKEN_PATH = os.path.join(os.path.dirname(__file__), "token.json") # Unused
 
 def load_documents():
@@ -133,20 +133,22 @@ def load_documents():
         return []
         
     if not os.path.isfile(creds_path):
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR: Credentials file not found at path: {creds_path}")
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR: Credentials file not found at path specified by GOOGLE_APPLICATION_CREDENTIALS: {creds_path}")
         return []
+    else:
+        print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: {creds_path}")
 
     try:
         loader = GoogleDriveLoader(
             folder_id=FOLDER_ID,
-            service_account_key=creds_path, # Use the variable
+            service_account_key=creds_path,
             file_types=["document", "pdf", "sheet"],
             recursive=True,
         )
         print("[LEAD_GRAPH_INIT] GoogleDriveLoader initialized.")
         docs = loader.load()
         print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
-        if not docs: # This means docs is an empty list
+        if not docs:
             print("[LEAD_GRAPH_INIT] No documents were loaded. Check folder content, permissions, and loader configuration. Also check logs above for any specific errors from the loader.")
         return docs
     except Exception as e:
@@ -156,10 +158,9 @@ def load_documents():
 
 def setup_rag():
     docs = load_documents()
-    # The print for number of docs is now more detailed within load_documents
     print(f"[LEAD_GRAPH_INIT] setup_rag: docs loaded status: {docs is not None}, number of docs: {len(docs) if docs is not None else 'N/A'}")
     
-    if not docs: # Handles None or empty list
+    if not docs: 
         print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded or an error occurred, RAG chain will not be functional.")
         return None
 
@@ -178,13 +179,12 @@ def setup_rag():
     {context}
     ### Question ###
     {question}
-    """) # Simplified prompt for now
+    """)
 
     rag_chain_local = (
         RunnableMap({
             "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
             "question": lambda x: x["question"]
-            # "history": lambda x: x.get("history", []) # Removed for simplicity, can add back
         }) | prompt | llm
     )
     print(f"[LEAD_GRAPH_INIT] setup_rag: returning rag_chain: {rag_chain_local is not None}")
@@ -194,12 +194,10 @@ rag_chain = setup_rag()
 print(f"[LEAD_GRAPH_INIT] Global rag_chain initialized: {rag_chain is not None}")
 
 if __name__ == "__main__":
-    # This section is for local testing
     print("Testing lead_graph.py locally...")
     if not os.getenv("GROQ_API_KEY"):
         print("Warning: GROQ_API_KEY not set.")
     
-    # Test RAG chain
     if rag_chain:
         print("\n--- RAG Chain Test ---")
         try:
@@ -211,7 +209,6 @@ if __name__ == "__main__":
         print("\n--- RAG Chain Test ---")
         print("RAG chain is None. Skipping RAG test.")
 
-    # Test Lead Extraction
     print("\n--- Lead Extraction Test ---")
     text = "Bonjour, je suis Jean Dupont. Mon email est jean.dupont@example.com et mon tel est 0123456789."
     try:
