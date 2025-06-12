@@ -1,7 +1,5 @@
 import os
 import json
-# import hmac
-# import hashlib
 import requests
 from flask import Blueprint, request, jsonify
 from dotenv import load_dotenv
@@ -43,7 +41,7 @@ def process_message(message_body: str, phone_number: str) -> str:
     state = get_user_state(phone_number)
     history = state["history"]
     history.append({"role": "user", "content": message_body})
-    response_text = "Je rencontre un problème technique. Veuillez réessayer plus tard."
+    response_text = "Je rencontre un problème technique. Veuillez réessayer plus tard." # Default
 
     if not LEAD_GRAPH_IMPORTED_SUCCESSFULLY:
         print("[PROCESS_MESSAGE] Critical: lead_graph components not imported.")
@@ -74,12 +72,13 @@ def process_message(message_body: str, phone_number: str) -> str:
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error RAG chain (step 0): {e}")
                 response_text = "Souci avec ma base de données. Reformulez svp."
+
         if state["exchange_count"] >= 2:
             print("[PROCESS_MESSAGE] Transitioning to step 1 (lead collection).")
             state["step"] = 1
-            # Ensure response_text is a string before concatenation
-            if not isinstance(response_text, str): response_text = str(response_text)
-            response_text += "\n\nPour mieux vous servir, quels sont vos nom, email et téléphone ?"
+            current_response_str = str(response_text) # Ensure it's a string
+            current_response_str += "\n\nPour mieux vous servir, quels sont vos nom, email et téléphone ?"
+            response_text = current_response_str
 
     elif current_step == 1:
         print("[PROCESS_MESSAGE] Step 1: Lead Collection")
@@ -153,7 +152,7 @@ def verify_webhook():
 @whatsapp.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
-    print(f"[WEBHOOK_POST] Received: {json.dumps(data, indent=2)}")
+    # print(f"[WEBHOOK_POST] Received: {json.dumps(data, indent=2)}") # Can be very verbose
     try:
         if data.get('object') == 'whatsapp_business_account':
             for entry in data.get('entry', []):
@@ -161,38 +160,42 @@ def webhook():
                     value = change.get('value', {})
                     if value.get('messages'):
                         for msg_obj in value.get('messages', []):
-                            from_number = msg_obj.get('from') # Corrected variable name
+                            from_number_val = msg_obj.get('from') # Renamed to avoid conflict with 'from' keyword
                             msg_type = msg_obj.get('type')
-                            if from_number and msg_type == 'text':
+                            if from_number_val and msg_type == 'text':
                                 msg_body = msg_obj['text']['body']
-                                print(f'[WEBHOOK_POST] Processing text message from {from_number}: "{msg_body}"')
-                                response_text = process_message(msg_body, from_number) # Ensure this uses from_number
-                                # *** THE CRITICAL FIX IS HERE ***
-                                print(f'[WEBHOOK_POST] Generated response for {from_number}: "{response_text}"')
-                                if response_text:
-                                    send_whatsapp_message(from_number, response_text)
+                                print(f'[WEBHOOK_POST] Processing text message from {from_number_val}: "{msg_body}"')
+                                response_text_val = process_message(msg_body, from_number_val) # Renamed
+                                print(f'[WEBHOOK_POST] Generated response for {from_number_val}: "{response_text_val}"')
+                                if response_text_val:
+                                    send_whatsapp_message(from_number_val, response_text_val)
                                 else:
-                                    print(f"[WEBHOOK_POST] No response for {from_number}.")
-                            elif from_number:
-                                print(f"[WEBHOOK_POST] Non-text type '{msg_type}' from {from_number}.")
+                                    print(f"[WEBHOOK_POST] No response for {from_number_val}.")
+                            elif from_number_val:
+                                print(f"[WEBHOOK_POST] Non-text type '{msg_type}' from {from_number_val}.")
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         print(f"[WEBHOOK_POST] Error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'status': 'error', 'message': "Internal server error"}), 500
 
-def send_whatsapp_message(to_number: str, message_text: str):
+def send_whatsapp_message(to_number: str, message_text: str): # Parameter is message_text
     if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
         print("[WHATSAPP_SEND] CRITICAL: Token/PhoneID missing.")
         return {"error": "Server WhatsApp config error."}
     url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": message_text}}
-    print(f"[WHATSAPP_SEND] To {to_number}: "{message_text}"")
+
+    # Corrected print statement using 'message_text'
+    print(f'[WHATSAPP_SEND] To {to_number}: "{message_text}"')
+    # Keep other detailed logs if needed, or remove if too verbose
+    # print(f"[WHATSAPP_SEND] Payload: {json.dumps(payload, indent=2)}")
+
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
         result = response.json()
-        print(f"[WHATSAPP_SEND] API Response: {result}")
+        # print(f"[WHATSAPP_SEND] API Response: {result}") # Can be verbose
         return result
     except requests.exceptions.Timeout:
         print(f"[WHATSAPP_SEND] Error: Timeout for {to_number}")
