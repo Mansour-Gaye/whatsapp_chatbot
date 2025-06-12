@@ -17,6 +17,8 @@ google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
 langchain_huggingface
+google-auth
+
 
 # --- Embeddings/Vector Stores ---
 faiss-cpu
