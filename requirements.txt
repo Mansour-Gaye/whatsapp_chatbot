@@ -9,6 +9,7 @@ langchain
 langchain-core
 langchain-community
 langchain-groq
+langchain-openai
 
 # --- Google Drive/Cloud ---
 google-api-python-client
@@ -18,8 +19,6 @@ google-auth
 
 # --- Embeddings/Vector Stores ---
 faiss-cpu
-langchain_huggingface
-sentence-transformers
 
 # --- Data Models ---
 pydantic
