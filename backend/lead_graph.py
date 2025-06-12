@@ -17,7 +17,7 @@ from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
 # Need to import datetime if used in save_lead_to_drive
 from datetime import datetime
-
+import traceback # Added for detailed traceback
 
 # 💾 Cache
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
@@ -116,35 +116,51 @@ def collect_lead_from_text(text: str) -> Lead:
     lead = structured_llm.invoke(text)
     save_lead_to_csv(lead)
     save_lead_to_sqlite(lead)
-    save_lead_to_drive(lead)  # Nouvelle fonctionnalité
+    save_lead_to_drive(lead)
     return lead
 
 # ✅ RAG setup
 FOLDER_ID = "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN"
-# TOKEN_PATH = os.path.join(os.path.dirname(__file__), "token.json") # This was unused
+# TOKEN_PATH = os.path.join(os.path.dirname(__file__), "token.json") # Unused
 
 def load_documents():
-    loader = GoogleDriveLoader(
-        folder_id=FOLDER_ID,
-        # Make sure GOOGLE_APPLICATION_CREDENTIALS is set in your environment
-        service_account_key=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"), 
-        file_types=["document", "pdf", "sheet"],
-        recursive=True,
-    )
+    print(f"[LEAD_GRAPH_INIT] Attempting to load documents from Google Drive folder: {FOLDER_ID}")
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    print(f"[LEAD_GRAPH_INIT] Using service account key from env var GOOGLE_APPLICATION_CREDENTIALS: {creds_path}")
+    
+    if not creds_path:
+        print("[LEAD_GRAPH_INIT] CRITICAL ERROR: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
+        return []
+        
+    if not os.path.isfile(creds_path):
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR: Credentials file not found at path: {creds_path}")
+        return []
+
     try:
+        loader = GoogleDriveLoader(
+            folder_id=FOLDER_ID,
+            service_account_key=creds_path, # Use the variable
+            file_types=["document", "pdf", "sheet"],
+            recursive=True,
+        )
+        print("[LEAD_GRAPH_INIT] GoogleDriveLoader initialized.")
         docs = loader.load()
+        print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
+        if not docs: # This means docs is an empty list
+            print("[LEAD_GRAPH_INIT] No documents were loaded. Check folder content, permissions, and loader configuration. Also check logs above for any specific errors from the loader.")
         return docs
     except Exception as e:
-        print(f"[LEAD_GRAPH_INIT] Error loading documents from Google Drive: {e}")
-        return [] # Return empty list on error
-
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading documents from Google Drive: {e}")
+        print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
+        return []
 
 def setup_rag():
     docs = load_documents()
-    print(f"[LEAD_GRAPH_INIT] setup_rag: docs loaded: {docs is not None}, number of docs: {len(docs) if docs is not None else 'Error or None'}") # Adjusted print for clarity
+    # The print for number of docs is now more detailed within load_documents
+    print(f"[LEAD_GRAPH_INIT] setup_rag: docs loaded status: {docs is not None}, number of docs: {len(docs) if docs is not None else 'N/A'}")
     
-    if not docs: # Checks for None or empty list
-        print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded, RAG chain will not be functional.")
+    if not docs: # Handles None or empty list
+        print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded or an error occurred, RAG chain will not be functional.")
         return None
 
     embeddings = HuggingFaceEmbeddings(
@@ -152,41 +168,23 @@ def setup_rag():
         model_kwargs={'device': 'cpu'}
     )
 
-    # Optional: Caching embeddings for all docs (can be time-consuming for many/large docs)
-    # for doc in docs:
-    #     get_cached_embeddings(doc.page_content[:1000], embeddings)
-
     vectorstore = FAISS.from_documents(docs, embeddings)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2, "score_threshold": 0.8})
 
     prompt = ChatPromptTemplate.from_template("""
     ### Rôle ###
-    Vous êtes un assistant virtuel expert de TRANSLAB INTERNATIONAL, une entreprise spécialisée en interprétation de conférence et traduction professionnelle. Votre rôle est d'aider les utilisateurs en répondant à leurs questions sur nos services, notre entreprise, et de faciliter la prise de contact pour des demandes de devis ou d'informations supplémentaires. Vous devez être professionnel, courtois et efficace.
-
-    ### Instructions Générales ###
-    1.  **Répondez en français.**
-    2.  **Soyez concis et pertinent.** Évitez les réponses trop longues. Allez droit au but.
-    3.  **Utilisez les informations du contexte fourni.** Ne donnez pas d'informations qui ne sont pas dans le contexte. Si la réponse n'est pas dans le contexte, dites que vous n'avez pas l'information et proposez d'aider autrement.
-    4.  **Maintenez le ton professionnel** de TRANSLAB INTERNATIONAL.
-    5.  **Objectif principal :** Aider l'utilisateur et, si pertinent, le guider vers une demande de contact/devis ou la collecte d'informations de lead.
-
-    ### Informations sur TRANSLAB INTERNATIONAL (Contexte) ###
+    Vous êtes un assistant virtuel expert de TRANSLAB INTERNATIONAL...
+    ### Contexte ###
     {context}
-
-    ### Historique de la conversation ###
-    {history}
-
-    ### Question de l'utilisateur ###
+    ### Question ###
     {question}
-
-    ### Réponse de l'assistant ###
-    """) # Assuming history is passed in, if not, remove {history}
+    """) # Simplified prompt for now
 
     rag_chain_local = (
         RunnableMap({
             "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
-            "question": lambda x: x["question"],
-            "history": lambda x: x.get("history", []) # Pass history if available
+            "question": lambda x: x["question"]
+            # "history": lambda x: x.get("history", []) # Removed for simplicity, can add back
         }) | prompt | llm
     )
     print(f"[LEAD_GRAPH_INIT] setup_rag: returning rag_chain: {rag_chain_local is not None}")
@@ -196,28 +194,16 @@ rag_chain = setup_rag()
 print(f"[LEAD_GRAPH_INIT] Global rag_chain initialized: {rag_chain is not None}")
 
 if __name__ == "__main__":
-    # This section is for local testing and won't run on Render unless explicitly called.
+    # This section is for local testing
     print("Testing lead_graph.py locally...")
-    
-    # Mock environment variables if not set (for local testing only)
     if not os.getenv("GROQ_API_KEY"):
-        print("Warning: GROQ_API_KEY not set. LLM calls may fail.")
-    if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        print("Warning: GOOGLE_APPLICATION_CREDENTIALS not set. Google Drive loading will likely fail.")
-    else:
-        print(f"Using GOOGLE_APPLICATION_CREDENTIALS: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}")
+        print("Warning: GROQ_API_KEY not set.")
     
-    # Test RAG chain if initialized
+    # Test RAG chain
     if rag_chain:
         print("\n--- RAG Chain Test ---")
-        test_history = [{"role": "user", "content": "Bonjour"}, {"role": "assistant", "content": "Bonjour! Comment puis-je vous aider?"}]
         try:
-            response = rag_chain.invoke({
-                "question": "Quels sont vos services ?",
-                "history": test_history,
-                "company_name": "TRANSLAB INTERNATIONAL", # Ensure these are passed if your chain expects them
-                "company_specialty": "Interprétation de conférence et Traduction"
-            })
+            response = rag_chain.invoke({"question": "Quels sont vos services ?"})
             print(f"RAG Response: {response.content if hasattr(response, 'content') else response}")
         except Exception as e:
             print(f"Error invoking RAG chain: {e}")
