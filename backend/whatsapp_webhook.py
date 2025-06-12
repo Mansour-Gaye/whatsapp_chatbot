@@ -1,4 +1,3 @@
-
 import os
 import json
 # import hmac # Not strictly used, can be omitted if not needed elsewhere
@@ -12,7 +11,7 @@ import traceback # For more detailed error logging in webhook
 try:
     from lead_graph import Lead, structured_llm, rag_chain, llm as base_llm_from_graph
     # Also import saving functions if they are to be called from here
-    from lead_graph import save_lead_to_csv, save_lead_to_sqlite
+    from lead_graph import save_lead_to_csv, save_lead_to_sqlite 
     # from lead_graph import save_lead_to_drive # If you plan to re-enable and call this
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = True
     print("[WHATSAPP_WEBHOOK_INIT] Successfully imported components from lead_graph.")
@@ -21,7 +20,7 @@ except ImportError as e:
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = False
     # Define placeholders if import fails, so the rest of the script doesn't crash immediately on definition
     Lead, structured_llm, rag_chain, base_llm_from_graph = None, None, None, None
-    save_lead_to_csv, save_lead_to_sqlite = None, None
+    save_lead_to_csv, save_lead_to_sqlite = None, None 
     # save_lead_to_drive = None
 
 load_dotenv()
@@ -33,7 +32,7 @@ WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 WHATSAPP_PHONE_ID = os.getenv('WHATSAPP_PHONE_ID')
 VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
 
-user_states = {}
+user_states = {} 
 
 print(f"[CONFIG] WhatsApp Phone ID: {WHATSAPP_PHONE_ID}")
 print(f"[CONFIG] Verify Token: {VERIFY_TOKEN}")
@@ -53,9 +52,9 @@ def process_message(message_body: str, phone_number: str) -> str:
     state = get_user_state(phone_number)
     history = state["history"]
     history.append({"role": "user", "content": message_body})
-
+    
     # Default response in case all logic paths fail
-    response_text = "Je rencontre un problème technique pour le moment. Veuillez réessayer plus tard."
+    response_text = "Je rencontre un problème technique pour le moment. Veuillez réessayer plus tard." 
 
     if not LEAD_GRAPH_IMPORTED_SUCCESSFULLY:
         print("[PROCESS_MESSAGE] Critical: lead_graph components were not imported. Using static error message.")
@@ -83,20 +82,20 @@ def process_message(message_body: str, phone_number: str) -> str:
                 print("[PROCESS_MESSAGE] rag_chain found (step 0). Attempting RAG invoke.")
                 response_obj = rag_chain.invoke({
                     "history": history, "question": message_body,
-                    "company_name": "TRANSLAB INTERNATIONAL",
+                    "company_name": "TRANSLAB INTERNATIONAL", 
                     "company_specialty": "Interprétation de conférence et Traduction"
                 })
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error during RAG chain invocation (step 0): {e}")
                 response_text = "J'ai eu un souci en consultant ma base de données. Pouvez-vous reformuler ?"
-
+        
         # Transition to lead collection after 2 exchanges
         if state["exchange_count"] >= 2: # Check before modifying response_text
             print(f"[PROCESS_MESSAGE] Transitioning to step 1 (lead collection).")
             state["step"] = 1
             response_text += "\n\nPour mieux vous aider, puis-je connaître votre nom, email et téléphone ?"
-
+    
     elif current_step == 1:
         print("[PROCESS_MESSAGE] Step 1: Lead Collection")
         lead_data = state["lead"]
@@ -110,7 +109,7 @@ def process_message(message_body: str, phone_number: str) -> str:
                 if lead_infos.name: lead_data["name"] = lead_infos.name
                 if lead_infos.email: lead_data["email"] = lead_infos.email
                 if lead_infos.phone: lead_data["phone"] = lead_infos.phone
-
+                
                 missing = [field for field in ["name", "email", "phone"] if not lead_data.get(field)]
                 if missing:
                     response_text = f"Merci ! Il me manque encore votre {', '.join(missing)}."
@@ -129,7 +128,7 @@ def process_message(message_body: str, phone_number: str) -> str:
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error during lead processing (step 1): {e}\n{traceback.format_exc()}")
                 response_text = "Un problème est survenu lors de l'enregistrement de vos informations."
-
+                
     else: # current_step == 2 or any other state (general conversation post-lead)
         print(f"[PROCESS_MESSAGE] Step {current_step}: General post-lead conversation")
         if rag_chain is None:
@@ -148,7 +147,7 @@ def process_message(message_body: str, phone_number: str) -> str:
                 print(f"[PROCESS_MESSAGE] rag_chain found (step {current_step}). Attempting RAG invoke.")
                 response_obj = rag_chain.invoke({
                     "history": history, "question": message_body,
-                    "company_name": "TRANSLAB INTERNATIONAL",
+                    "company_name": "TRANSLAB INTERNATIONAL", 
                     "company_specialty": "Interprétation de conférence et Traduction"
                 })
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
@@ -157,7 +156,6 @@ def process_message(message_body: str, phone_number: str) -> str:
                 response_text = "J'ai eu un souci en consultant mes notes. Que voulez-vous savoir d'autre ?"
 
     history.append({"role": "assistant", "content": response_text})
-    # print(f"[PROCESS_MESSAGE] Current history for {phone_number}: {history}") # Optional: for deep debugging history
     return response_text
 
 @whatsapp.route('/webhook', methods=['GET'])
@@ -183,28 +181,27 @@ def webhook():
                 for change in entry.get('changes', []):
                     value = change.get('value', {})
                     if value.get('messages'):
-                        for message_obj in value.get('messages', []):
+                        for message_obj in value.get('messages', []): # Renamed to avoid conflict
                             from_number = message_obj.get('from')
                             message_type = message_obj.get('type')
                             if from_number and message_type == 'text':
                                 message_body = message_obj['text']['body']
-                                print(f"[WEBHOOK_POST] Processing text message from {from_number}: "{message_body}"")
+                                # Corrected print statement:
+                                print(f'[WEBHOOK_POST] Processing text message from {from_number}: "{message_body}"')
                                 response_text = process_message(message_body, from_number)
                                 print(f"[WEBHOOK_POST] Generated response for {from_number}: "{response_text}"")
-                                if response_text:
+                                if response_text: # Ensure there's a response to send
                                     send_whatsapp_message(from_number, response_text)
                                 else:
                                     print(f"[WEBHOOK_POST] No response generated for {from_number}.")
                             elif from_number: # Message received but not text
                                 print(f"[WEBHOOK_POST] Received non-text message type '{message_type}' from {from_number}. No action taken.")
-                                # Optionally send a message like "I can only process text messages."
-                                # send_whatsapp_message(from_number, "Je ne peux traiter que des messages texte pour le moment.")
                             else:
                                 print(f"[WEBHOOK_POST] Message received without 'from_number' or not a text message.")
         return jsonify({'status': 'success'}), 200
     except Exception as e:
         print(f"[WEBHOOK_POST] Error processing webhook: {str(e)}\n{traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': "Internal server error"}), 500 # Avoid sending detailed errors to Meta
+        return jsonify({'status': 'error', 'message': "Internal server error"}), 500
 
 def send_whatsapp_message(to_number: str, message_text: str):
     if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:
@@ -214,12 +211,12 @@ def send_whatsapp_message(to_number: str, message_text: str):
     url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": message_text}}
-
+    
     print(f"[WHATSAPP_SEND] Sending to {to_number}: "{message_text}"")
-
+    
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=15) # Increased timeout slightly
-        response.raise_for_status()
+        response = requests.post(url, headers=headers, json=payload, timeout=15) 
+        response.raise_for_status() 
         result = response.json()
         print(f"[WHATSAPP_SEND] API Response: {result}")
         return result
@@ -234,7 +231,6 @@ def send_whatsapp_message(to_number: str, message_text: str):
     except requests.exceptions.RequestException as req_err:
         print(f"[WHATSAPP_SEND] Request error for {to_number}: {req_err}")
         return {"error": f"Request error sending message: {req_err}"}
-    except Exception as e: # Catch any other unexpected errors
+    except Exception as e: 
         print(f"[WHATSAPP_SEND] Unexpected exception for {to_number}: {e}\n{traceback.format_exc()}")
-        return {"error": "Unexpected server error sending message."}
-
+        return {"error": "Unexpected server error sending message."
