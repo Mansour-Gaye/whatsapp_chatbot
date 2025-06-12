@@ -90,20 +90,33 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
 
     try:
-        specific_doc_id = "14K4ZhA334LNGrCG5gYHLgcr3TWVu-Dpki1Kw4TI93EU" 
+        # Utilisez l'ID de votre document Google Drive ici
+        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", "VOTRE_ID_DE_DOCUMENT") 
         print(f"[LEAD_GRAPH_INIT] Attempting to load new specific document ID: '{specific_doc_id}'")
         
         loader = GoogleDriveLoader(
             service_account_key=creds_path,
-            document_ids=[specific_doc_id]
-            # file_types=["pdf"] # Removed this line
+            document_ids=[specific_doc_id],
+            file_types=["pdf", "docx", "txt"]  # Ajout des types de fichiers supportés
         )
         print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific document ID: '{specific_doc_id}'.")
+        
+        # Vérification des permissions
+        try:
+            from google.oauth2 import service_account
+            from googleapiclient.discovery import build
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            service = build('drive', 'v3', credentials=credentials)
+            file = service.files().get(fileId=specific_doc_id, fields='id, name').execute()
+            print(f"[LEAD_GRAPH_INIT] Successfully verified access to file: {file.get('name')}")
+        except Exception as e:
+            print(f"[LEAD_GRAPH_INIT] WARNING: Could not verify file access: {str(e)}")
+        
         docs = loader.load()
         
         print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
         if not docs: 
-            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a PDF (though type not specified to loader). \n3. The service account ('{os.getenv('GDRIVE_SERVICE_ACCOUNT_EMAIL_FOR_LOGGING', 'render3@intricate-sweep-453002-p1.iam.gserviceaccount.com')}') has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
+            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a supported type (PDF, DOCX, TXT). \n3. The service account has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
         return docs
     except Exception as e:
         print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
@@ -187,5 +200,8 @@ if __name__ == "__main__":
         else:
             print("structured_llm is None, skipping lead extraction test.")
     except Exception as e: print(f"Error collecting lead: '{e}'")
+
+
+
 
 
