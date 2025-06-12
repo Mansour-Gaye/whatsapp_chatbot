@@ -71,7 +71,7 @@ class DriveLoader:
                 done = False
                 while done is False:
                     status, done = downloader.next_chunk()
-                return fh.getvalue().decode('utf-8')
+                return fh.getvalue().decode('utf-8', errors='replace')
             
             # Si c'est un fichier normal
             else:
@@ -81,7 +81,19 @@ class DriveLoader:
                 done = False
                 while done is False:
                     status, done = downloader.next_chunk()
-                return fh.getvalue().decode('utf-8')
+                
+                # Essayer différents encodages
+                content = fh.getvalue()
+                encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+                
+                for encoding in encodings:
+                    try:
+                        return content.decode(encoding)
+                    except UnicodeDecodeError:
+                        continue
+                
+                # Si aucun encodage ne fonctionne, utiliser 'replace' pour ignorer les caractères problématiques
+                return content.decode('utf-8', errors='replace')
                 
         except Exception as e:
             logger.error(f"Erreur lors de la récupération du fichier {file_id}: {e}")
