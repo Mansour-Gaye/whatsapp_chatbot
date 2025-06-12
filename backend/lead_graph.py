@@ -4,18 +4,19 @@ from pydantic import BaseModel, Field
 import csv
 import os
 import sqlite3
-import traceback
-from googleapiclient.http import MediaIoBaseUpload
+import traceback 
+from googleapiclient.http import MediaIoBaseUpload 
 import io
+# from gdrive_utils import get_drive_service # Still commented out
 try:
-    from gdrive_utils import get_drive_service
+    from gdrive_utils import get_drive_service 
 except ImportError:
     print("[LEAD_GRAPH_INIT] Warning: gdrive_utils or get_drive_service not found. `save_lead_to_drive` might fail if re-enabled.")
-    def get_drive_service():
+    def get_drive_service(): 
         print("Error: get_drive_service not available due to missing gdrive_utils (currently commented out).")
         return None
 
-from langchain_google_community import GoogleDriveLoader
+from langchain_google_community import GoogleDriveLoader 
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -23,7 +24,7 @@ from langchain_community.cache import SQLiteCache
 import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
-from datetime import datetime
+from datetime import datetime 
 
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
@@ -63,27 +64,27 @@ def save_lead_to_sqlite(lead: Lead, db_path=None):
     conn.commit()
     conn.close()
 
-# def save_lead_to_drive(lead: Lead): # Temporarily commented out
+# def save_lead_to_drive(lead: Lead): # Still commented out
 #     print("[Google Drive] save_lead_to_drive called, but is temporarily disabled.")
 #     return None
-
+        
 def collect_lead_from_text(text: str) -> Lead:
     if structured_llm is None:
         print("[COLLECT_LEAD] structured_llm is None. Cannot extract lead.")
-        return Lead(name="Error: LLM N/A", email="Error: LLM N/A", phone="Error: LLM N/A")
+        return Lead(name="Error: LLM N/A", email="Error: LLM N/A", phone="Error: LLM N/A") 
     lead = structured_llm.invoke(text)
     save_lead_to_csv(lead)
     save_lead_to_sqlite(lead)
-    # save_lead_to_drive(lead) # Temporarily commented out
+    # save_lead_to_drive(lead) # Still commented out
     return lead
 
-ACTIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN")
+ACTIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN") # Used for logging context
 
 def load_documents():
-    print(f"[LEAD_GRAPH_INIT] Attempting to load documents from folder. Effective Folder ID being used: '{ACTIVE_FOLDER_ID}'")
+    print(f"[LEAD_GRAPH_INIT] Attempting to load documents. Context Folder ID (not used for specific ID load): '{ACTIVE_FOLDER_ID}'")
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     print(f"[LEAD_GRAPH_INIT] Using service account key from env var GOOGLE_APPLICATION_CREDENTIALS: '{creds_path}'")
-
+    
     if not creds_path:
         print("[LEAD_GRAPH_INIT] CRITICAL ERROR: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
         return []
@@ -94,33 +95,39 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
 
     try:
-        print(f"[LEAD_GRAPH_INIT] Attempting to load from folder_id: '{ACTIVE_FOLDER_ID}' using GoogleDriveLoader.")
+        specific_doc_id = "14K4ZhA334LNGrCG5gYHLgcr3TWVu-Dpki1Kw4TI93EU" # New specific ID
+        print(f"[LEAD_GRAPH_INIT] Attempting to load new specific document ID: '{specific_doc_id}'")
+        
         loader = GoogleDriveLoader(
             service_account_key=creds_path,
-            folder_id=ACTIVE_FOLDER_ID,
-            file_types=["document", "pdf", "sheet"],
-            recursive=True
+            document_ids=[specific_doc_id],
+            file_types=["pdf"] # Explicitly state we are expecting a PDF
         )
-        print("[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for folder scan.")
+        print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific PDF ID: '{specific_doc_id}'.")
         docs = loader.load()
+        
         print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
         if not docs:
-            print(f"[LEAD_GRAPH_INIT] No documents loaded from folder: '{ACTIVE_FOLDER_ID}'. Check folder content, SA permissions, etc.")
+            print(f"[LEAD_GRAPH_INIT] No document loaded for specific PDF ID: '{specific_doc_id}'. Please ensure: 
+1. The ID is absolutely correct. 
+2. The file is a PDF. 
+3. The service account ('{os.getenv('GDRIVE_SERVICE_ACCOUNT_EMAIL_FOR_LOGGING', 'render3@intricate-sweep-453002-p1.iam.gserviceaccount.com')}') has 'Viewer' permission DIRECTLY on this file. 
+4. The file is not in the trash or in a restricted state preventing API access.")
         return docs
     except Exception as e:
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading documents from folder '{ACTIVE_FOLDER_ID}': '{e}'")
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
         return []
 
 def setup_rag():
     docs = load_documents()
     print(f"[LEAD_GRAPH_INIT] setup_rag: docs loaded status: {docs is not None}, number of docs: {len(docs) if docs is not None else 'N/A'}")
-    if not docs:
+    if not docs: 
         print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded, RAG chain will not be functional.")
         return None
     embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2", model_kwargs={'device': 'cpu'})
-    vectorstore = FAISS.from_documents(docs, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 2, "score_threshold": 0.8})
+    vectorstore = FAISS.from_documents(docs, embeddings) # This will fail if docs is empty
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 1 if len(docs) == 1 else 2, "score_threshold": 0.8})
     prompt = ChatPromptTemplate.from_template("### Rôle ###\nVous êtes un assistant virtuel expert de TRANSLAB INTERNATIONAL...\n### Contexte ###\n{context}\n### Question ###\n{question}")
     rag_chain_local = RunnableMap({"context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]), "question": lambda x: x["question"]}) | prompt | llm
     print(f"[LEAD_GRAPH_INIT] setup_rag: returning rag_chain: {rag_chain_local is not None}")
