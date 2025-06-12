@@ -95,22 +95,22 @@ def load_documents():
         
         loader = GoogleDriveLoader(
             service_account_key=creds_path,
-            document_ids=[specific_doc_id],
-            file_types=["pdf"] 
+            document_ids=[specific_doc_id]
+            # file_types=["pdf"] # Removed this line
         )
-        print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific PDF ID: '{specific_doc_id}'.")
+        print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific document ID: '{specific_doc_id}'.")
         docs = loader.load()
         
         print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
         if not docs: 
-            print(f"[LEAD_GRAPH_INIT] No document loaded for specific PDF ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a PDF. \n3. The service account ('{os.getenv('GDRIVE_SERVICE_ACCOUNT_EMAIL_FOR_LOGGING', 'render3@intricate-sweep-453002-p1.iam.gserviceaccount.com')}') has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
+            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a PDF (though type not specified to loader). \n3. The service account ('{os.getenv('GDRIVE_SERVICE_ACCOUNT_EMAIL_FOR_LOGGING', 'render3@intricate-sweep-453002-p1.iam.gserviceaccount.com')}') has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
         return docs
     except Exception as e:
         print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
         return []
 
-def setup_rag(): # This is the full original setup_rag logic now
+def setup_rag(): 
     print("[LEAD_GRAPH_SETUP_RAG] Starting RAG setup process...")
     docs = load_documents()
     print(f"[LEAD_GRAPH_SETUP_RAG] load_documents returned: {type(docs)}, count: {len(docs) if docs is not None else 'N/A'}")
@@ -168,7 +168,6 @@ if __name__ == "__main__":
     print("Testing lead_graph.py locally...")
     if not os.getenv("GROQ_API_KEY"): print("Warning: GROQ_API_KEY not set.")
     
-    # Test lazy loading RAG chain
     print("\n--- RAG Chain Lazy Load Test ---")
     test_rag_chain = get_rag_chain()
     if test_rag_chain:
