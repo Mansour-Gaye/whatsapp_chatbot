@@ -19,6 +19,7 @@ google-auth
 # --- Embeddings/Vector Stores ---
 faiss-cpu
 langchain_huggingface
+sentence-transformers
 
 # --- Data Models ---
 pydantic
