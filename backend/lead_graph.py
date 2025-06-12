@@ -82,11 +82,12 @@ def save_lead_to_drive(lead: Lead):
     """Sauvegarde le lead dans Google Drive sous forme de fichier texte"""
     try:
         drive = get_drive_service()
-        
+        # Use the same FOLDER_ID logic for consistency if saving leads to the same Drive area
+        folder_id_to_save = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN")
         file_metadata = {
             'name': f"lead_{lead.phone}.txt",
             'mimeType': 'text/plain',
-            'parents': [os.getenv('GOOGLE_DRIVE_FOLDER_ID')]
+            'parents': [folder_id_to_save]
         }
         
         content = f"""Nom: {lead.name}
@@ -120,11 +121,13 @@ def collect_lead_from_text(text: str) -> Lead:
     return lead
 
 # ✅ RAG setup
-FOLDER_ID = "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN"
+# Use environment variable for Folder ID, with a fallback to the previously hardcoded one.
+ACTIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN")
 # TOKEN_PATH = os.path.join(os.path.dirname(__file__), "token.json") # Unused
 
 def load_documents():
-    print(f"[LEAD_GRAPH_INIT] Attempting to load documents from Google Drive folder: {FOLDER_ID}")
+    # This print now uses ACTIVE_FOLDER_ID to show what's effectively being considered for folder scans (though not used in this specific doc test)
+    print(f"[LEAD_GRAPH_INIT] Attempting to load documents. Effective Folder ID for general scanning (if used): {ACTIVE_FOLDER_ID}")
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     print(f"[LEAD_GRAPH_INIT] Using service account key from env var GOOGLE_APPLICATION_CREDENTIALS: {creds_path}")
     
@@ -139,20 +142,24 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: {creds_path}")
 
     try:
+        specific_doc_id = "1ZffgKTE5uE0OT6dTjt3Y90dM59qRQ4-TxCA7VeV7WLs"
+        print(f"[LEAD_GRAPH_INIT] Attempting to load specific document ID: {specific_doc_id}")
+        
         loader = GoogleDriveLoader(
-            folder_id=FOLDER_ID,
-            service_account_key=creds_path,
-            file_types=["document", "pdf", "sheet"],
-            recursive=True,
+            # folder_id=ACTIVE_FOLDER_ID, # Commented out for specific doc test
+            document_ids=[specific_doc_id], 
+            service_account_key=creds_path
+            # recursive=True, # Not needed for specific document_ids
+            # file_types=["document", "pdf", "sheet"], # Not needed for specific document_ids
         )
-        print("[LEAD_GRAPH_INIT] GoogleDriveLoader initialized.")
+        print("[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific document.")
         docs = loader.load()
         print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
         if not docs:
-            print("[LEAD_GRAPH_INIT] No documents were loaded. Check folder content, permissions, and loader configuration. Also check logs above for any specific errors from the loader.")
+            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: {specific_doc_id}. Check permissions on this specific file for the service account, or if the ID is correct and the file is not trashed.")
         return docs
     except Exception as e:
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading documents from Google Drive: {e}")
+        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: {e}")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
         return []
 
@@ -161,7 +168,7 @@ def setup_rag():
     print(f"[LEAD_GRAPH_INIT] setup_rag: docs loaded status: {docs is not None}, number of docs: {len(docs) if docs is not None else 'N/A'}")
     
     if not docs: 
-        print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded or an error occurred, RAG chain will not be functional.")
+        print("[LEAD_GRAPH_INIT] setup_rag: No documents loaded, RAG chain will not be functional.")
         return None
 
     embeddings = HuggingFaceEmbeddings(
@@ -170,7 +177,7 @@ def setup_rag():
     )
 
     vectorstore = FAISS.from_documents(docs, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 2, "score_threshold": 0.8})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 1 if len(docs) == 1 else 2, "score_threshold": 0.8}) # Adjust k if only 1 doc
 
     prompt = ChatPromptTemplate.from_template("""
     ### Rôle ###
@@ -201,7 +208,7 @@ if __name__ == "__main__":
     if rag_chain:
         print("\n--- RAG Chain Test ---")
         try:
-            response = rag_chain.invoke({"question": "Quels sont vos services ?"})
+            response = rag_chain.invoke({"question": "Quel est le contenu du document?"}) # Generic question
             print(f"RAG Response: {response.content if hasattr(response, 'content') else response}")
         except Exception as e:
             print(f"Error invoking RAG chain: {e}")
@@ -216,3 +223,4 @@ if __name__ == "__main__":
         print(f"Extracted Lead: {lead}")
     except Exception as e:
         print(f"Error collecting lead: {e}")
+
