@@ -118,18 +118,17 @@ def collect_lead_from_text(text: str) -> Lead:
 FOLDER_ID = "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN"
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "token.json")
 
+from langchain_google_community import GoogleDriveLoader
+
 def load_documents():
-    try:
-        loader = GoogleDriveLoader(
-            folder_id=FOLDER_ID,
-            credentials_path=os.getenv('GOOGLE_APPLICATION_CREDENTIALS') ,  # Chemin explicite
-            file_types=["document", "pdf", "sheet"],
-            recursive=True
-        )
-        return loader.load()
-    except Exception as e:
-        print(f"[❌ RAG] Erreur de chargement : {e}")
-        return []
+    loader = GoogleDriveLoader(
+        folder_id=FOLDER_ID,
+        service_account_key=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        file_types=["document", "pdf", "sheet"],
+        recursive=True,
+    )
+    return loader.load()
+
 
 def setup_rag():
     docs = load_documents()
