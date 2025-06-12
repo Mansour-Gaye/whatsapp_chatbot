@@ -15,6 +15,7 @@ from langchain_community.cache import SQLiteCache
 import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
+from langchain_google_community import GoogleDriveLoader
 
 # 💾 Cache
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
