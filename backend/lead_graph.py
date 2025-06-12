@@ -25,6 +25,8 @@ import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
 from datetime import datetime 
+from drive_loader import get_drive_loader
+from langchain_core.documents import Document
 
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
@@ -90,21 +92,30 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
 
     try:
-        specific_doc_id = "14K4ZhA334LNGrCG5gYHLgcr3TWVu-Dpki1Kw4TI93EU" 
+        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", "VOTRE_ID_DE_DOCUMENT")
         print(f"[LEAD_GRAPH_INIT] Attempting to load new specific document ID: '{specific_doc_id}'")
         
-        loader = GoogleDriveLoader(
-            service_account_key=creds_path,
-            document_ids=[specific_doc_id]
-            # file_types=["pdf"] # Removed this line
+        # Utiliser notre nouveau DriveLoader
+        drive_loader = get_drive_loader()
+        if not drive_loader:
+            print("[LEAD_GRAPH_INIT] Failed to initialize DriveLoader")
+            return []
+            
+        # Récupérer le contenu du document
+        content = drive_loader.get_file_content(specific_doc_id)
+        if not content:
+            print(f"[LEAD_GRAPH_INIT] No content retrieved for document ID: '{specific_doc_id}'")
+            return []
+            
+        # Créer un document LangChain
+        doc = Document(
+            page_content=content,
+            metadata={"source": f"google_drive_{specific_doc_id}"}
         )
-        print(f"[LEAD_GRAPH_INIT] GoogleDriveLoader initialized for specific document ID: '{specific_doc_id}'.")
-        docs = loader.load()
         
-        print(f"[LEAD_GRAPH_INIT] loader.load() completed. Number of documents loaded: {len(docs) if docs is not None else 'None'}")
-        if not docs: 
-            print(f"[LEAD_GRAPH_INIT] No document loaded for specific ID: '{specific_doc_id}'. Please ensure: \n1. The ID is absolutely correct. \n2. The file is a PDF (though type not specified to loader). \n3. The service account ('{os.getenv('GDRIVE_SERVICE_ACCOUNT_EMAIL_FOR_LOGGING', 'render3@intricate-sweep-453002-p1.iam.gserviceaccount.com')}') has 'Viewer' permission DIRECTLY on this file. \n4. The file is not in the trash or in a restricted state preventing API access.")
-        return docs
+        print(f"[LEAD_GRAPH_INIT] Successfully loaded document from Google Drive")
+        return [doc]
+        
     except Exception as e:
         print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading specific document from Google Drive: '{e}'")
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
