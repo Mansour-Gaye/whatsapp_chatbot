@@ -47,3 +47,26 @@ credentials.json
 # Fichiers système
 .DS_Store
 Thumbs.db
+
+# Fichiers de cache et bases de données
+*.db
+*.sqlite
+*.sqlite3
+.langchain.db
+
+# Environnements virtuels
+venv/
+.venv/
+env/
+
+# Fichiers de build
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+
+# Fichiers de logs
+*.log
