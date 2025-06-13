@@ -65,7 +65,7 @@ class JinaEmbeddings(Embeddings):
             payload = {
                 "task": "retrieval.passage",
                 "model": "jina-embeddings-v3",
-                "texts": texts
+                "input": texts
             }
             
             # Envoyer la requête
@@ -94,7 +94,7 @@ class JinaEmbeddings(Embeddings):
             payload = {
                 "task": "retrieval.query",
                 "model": "jina-embeddings-v3",
-                "texts": [text]
+                "input": [text]
             }
             
             # Envoyer la requête
