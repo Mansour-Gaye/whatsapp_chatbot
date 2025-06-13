@@ -25,5 +25,8 @@ pydantic
 # --- Utilitaires ---
 requests
 
+# --- PostgreSQL ---
+supabase-py==2.3.0
+
 
 
