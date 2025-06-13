@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any, Optional
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 import csv
@@ -26,7 +26,15 @@ from langchain_community.cache import InMemoryCache
 from datetime import datetime 
 from drive_loader import get_drive_loader
 from langchain_core.documents import Document
+from gdrive_utils import DriveLoader
+import json
+import logging
 
+# Configuration du logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Configuration du cache Langchain
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
 
@@ -125,25 +133,37 @@ def load_documents():
         print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
         return []
 
-def setup_rag(): 
-    print("[LEAD_GRAPH_SETUP_RAG] Starting RAG setup process...")
-    docs = load_documents()
-    print(f"[LEAD_GRAPH_SETUP_RAG] load_documents returned: {type(docs)}, count: {len(docs) if docs is not None else 'N/A'}")
-    if not docs: 
-        print("[LEAD_GRAPH_SETUP_RAG] No documents loaded, RAG chain will not be functional.")
-        return None
-    
+def setup_rag():
+    """Initialise la chaîne RAG avec les documents de Google Drive."""
     try:
+        # Initialiser le loader Google Drive
+        loader = DriveLoader()
+        
+        # Charger les documents
+        documents = loader.load()
+        
+        if not documents:
+            logger.warning("Aucun document trouvé dans Google Drive")
+            return None
+            
         # Utiliser Jina Embeddings
         embeddings = JinaEmbeddings()
-        print("[LEAD_GRAPH_SETUP_RAG] Jina Embeddings loaded.")
+        logger.info("Jina Embeddings chargés")
         
-        vectorstore = FAISS.from_documents(docs, embeddings) 
-        print("[LEAD_GRAPH_SETUP_RAG] FAISS vector store created.")
+        # Créer le vectorstore
+        vectorstore = FAISS.from_documents(documents, embeddings)
+        logger.info("Vectorstore FAISS créé")
         
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 1 if len(docs) == 1 else 2, "score_threshold": 0.8})
-        print("[LEAD_GRAPH_SETUP_RAG] Retriever created.")
+        # Créer le retriever
+        retriever = vectorstore.as_retriever(
+            search_kwargs={
+                "k": 1 if len(documents) == 1 else 2,
+                "score_threshold": 0.8
+            }
+        )
+        logger.info("Retriever créé")
 
+        # Créer le prompt template
         prompt = ChatPromptTemplate.from_template(
             "### Rôle ###\nVous êtes un assistant virtuel expert de TRANSLAB INTERNATIONAL..."
             "\n### Contexte Documentaire (si disponible) ###\n{context}"
@@ -155,17 +175,20 @@ def setup_rag():
             "\n- Ne mentionnez PAS le contexte documentaire ou l'historique dans votre réponse, utilisez-les discrètement."
             "\n- Répondez en FRANÇAIS."
         )
-        print("[LEAD_GRAPH_SETUP_RAG] Prompt template created.")
+        logger.info("Template de prompt créé")
 
-        rag_chain_local = RunnableMap({
-            "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]), 
+        # Créer la chaîne RAG
+        rag_chain = RunnableMap({
+            "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
             "question": lambda x: x["question"],
-            "history": lambda x: x.get("history", []) 
+            "history": lambda x: x.get("history", [])
         }) | prompt | llm
-        print(f"[LEAD_GRAPH_SETUP_RAG] Runnable RAG chain constructed. Is None: {rag_chain_local is None}")
-        return rag_chain_local
+        
+        logger.info("Chaîne RAG créée avec succès")
+        return rag_chain
+        
     except Exception as e:
-        print(f"[LEAD_GRAPH_SETUP_RAG] Error during RAG component setup (embeddings, FAISS, etc.): {e}\n{traceback.format_exc()}")
+        logger.error(f"Erreur lors de l'initialisation de la chaîne RAG: {str(e)}")
         return None
 
 def get_rag_chain():
