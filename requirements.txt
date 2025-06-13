@@ -18,7 +18,6 @@ google-auth
 
 # --- Embeddings/Vector Stores ---
 faiss-cpu
-jina-embeddings
 
 # --- Data Models ---
 pydantic
