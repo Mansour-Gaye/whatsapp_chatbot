@@ -26,7 +26,7 @@ pydantic
 requests
 
 # --- PostgreSQL ---
-supabase==2.3.0
+supabase==1.0.3
 
 
 

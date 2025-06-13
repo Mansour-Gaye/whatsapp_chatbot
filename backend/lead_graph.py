@@ -98,6 +98,15 @@ def collect_lead_from_text(text: str) -> Lead:
         logger.error("Échec de la sauvegarde du lead dans Supabase")
     return lead_data
 
+# Garder les fonctions save_lead_to_csv et save_lead_to_sqlite pour la compatibilité
+def save_lead_to_csv(lead: Lead, filename=None):
+    """Fonction de compatibilité qui utilise save_lead."""
+    return save_lead(lead)
+
+def save_lead_to_sqlite(lead: Lead, db_path=None):
+    """Fonction de compatibilité qui utilise save_lead."""
+    return save_lead(lead)
+
 llm = ChatGroq(model="llama3-8b-8192", temperature=0, groq_api_key=os.getenv("GROQ_API_KEY") or "...")
 logger.info(f"LLM initialisé: {llm is not None}")
 
