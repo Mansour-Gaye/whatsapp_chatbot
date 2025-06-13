@@ -7,15 +7,7 @@ import sqlite3
 import traceback 
 from googleapiclient.http import MediaIoBaseUpload 
 import io
-# from gdrive_utils import get_drive_service # Still commented out
-try:
-    from gdrive_utils import get_drive_service 
-except ImportError:
-    print("[LEAD_GRAPH_INIT] Warning: gdrive_utils or get_drive_service not found. `save_lead_to_drive` might fail if re-enabled.")
-    def get_drive_service(): 
-        print("Error: get_drive_service not available due to missing gdrive_utils (currently commented out).")
-        return None
-
+from gdrive_utils import get_drive_service, DriveLoader
 from langchain_community.vectorstores import FAISS
 from jina_embeddings import JinaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -24,9 +16,7 @@ import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
 from datetime import datetime 
-from drive_loader import get_drive_loader
 from langchain_core.documents import Document
-from gdrive_utils import DriveLoader
 import json
 import logging
 
@@ -38,10 +28,31 @@ logger.setLevel(logging.INFO)
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
 
+def load_documents():
+    """Charge les documents depuis Google Drive."""
+    logger.info("Tentative de chargement des documents depuis Google Drive")
+    
+    try:
+        # Utiliser DriveLoader
+        loader = DriveLoader()
+        documents = loader.load()
+        
+        if not documents:
+            logger.warning("Aucun document trouvé dans Google Drive")
+            return []
+            
+        logger.info(f"Documents chargés avec succès depuis Google Drive ({len(documents)} documents)")
+        return documents
+        
+    except Exception as e:
+        logger.error(f"Erreur lors du chargement des documents: {str(e)}")
+        logger.error(traceback.format_exc())
+        return []
+
 # Initialisation du RAG au démarrage
-print("[LEAD_GRAPH_INIT] Initializing RAG chain...")
+logger.info("Initialisation de la chaîne RAG...")
 _rag_chain_instance = setup_rag()
-print(f"[LEAD_GRAPH_INIT] RAG chain initialized: {_rag_chain_instance is not None}")
+logger.info(f"Chaîne RAG initialisée: {_rag_chain_instance is not None}")
 
 def get_cached_embeddings(text: str, embeddings: JinaEmbeddings) -> List[float]:
     cache_key = f"embed_{hash(text)}"
@@ -88,50 +99,6 @@ def collect_lead_from_text(text: str) -> Lead:
     return lead_data
 
 ACTIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1SXe5kPSgjbN9jT1T9TgWyY-JpNlbynqN") 
-
-def load_documents():
-    print(f"[LEAD_GRAPH_INIT] Attempting to load documents. Context Folder ID (not used for specific ID load): '{ACTIVE_FOLDER_ID}'")
-    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    print(f"[LEAD_GRAPH_INIT] Using service account key from env var GOOGLE_APPLICATION_CREDENTIALS: '{creds_path}'")
-    
-    if not creds_path:
-        print("[LEAD_GRAPH_INIT] CRITICAL ERROR: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.")
-        return []
-    if not os.path.isfile(creds_path):
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR: Credentials file not found at path: '{creds_path}'")
-        return []
-    else:
-        print(f"[LEAD_GRAPH_INIT] Credentials file confirmed to exist at: '{creds_path}'")
-
-    try:
-        specific_doc_id = os.getenv("GOOGLE_DRIVE_DOC_ID", ACTIVE_FOLDER_ID)
-        print(f"[LEAD_GRAPH_INIT] Attempting to load document ID: '{specific_doc_id}'")
-        
-        # Utiliser notre nouveau DriveLoader
-        drive_loader = get_drive_loader()
-        if not drive_loader:
-            print("[LEAD_GRAPH_INIT] Failed to initialize DriveLoader")
-            return []
-            
-        # Récupérer le contenu du document
-        content = drive_loader.get_file_content(specific_doc_id)
-        if not content:
-            print(f"[LEAD_GRAPH_INIT] No content retrieved for document ID: '{specific_doc_id}'")
-            return []
-            
-        # Créer un document LangChain
-        doc = Document(
-            page_content=content,
-            metadata={"source": f"google_drive_{specific_doc_id}"}
-        )
-        
-        print(f"[LEAD_GRAPH_INIT] Successfully loaded document from Google Drive ({len(content)} caractères)")
-        return [doc]
-        
-    except Exception as e:
-        print(f"[LEAD_GRAPH_INIT] CRITICAL ERROR loading document from Google Drive: '{e}'")
-        print(f"[LEAD_GRAPH_INIT] Traceback: {traceback.format_exc()}")
-        return []
 
 def setup_rag():
     """Initialise la chaîne RAG avec les documents de Google Drive."""
