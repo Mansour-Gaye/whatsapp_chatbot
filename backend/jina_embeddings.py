@@ -1,7 +1,12 @@
 from typing import List, Optional
 import os
 import requests
+import logging
 from langchain_core.embeddings import Embeddings
+
+# Configuration du logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class JinaEmbeddings(Embeddings):
     """Classe pour gérer les embeddings via l'API Jina."""
@@ -21,6 +26,27 @@ class JinaEmbeddings(Embeddings):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        logger.info("JinaEmbeddings initialisé avec succès")
+    
+    def _make_request(self, payload: dict) -> dict:
+        """Fait une requête à l'API Jina avec gestion des erreurs.
+        
+        Args:
+            payload: Données à envoyer à l'API
+            
+        Returns:
+            Réponse de l'API au format JSON
+        """
+        try:
+            logger.debug(f"Envoi de la requête à Jina API: {payload}")
+            response = requests.post(self.api_url, headers=self.headers, json=payload, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erreur lors de la requête à l'API Jina: {str(e)}")
+            if hasattr(e.response, 'text'):
+                logger.error(f"Réponse de l'API: {e.response.text}")
+            raise
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Génère les embeddings pour une liste de textes.
@@ -34,20 +60,25 @@ class JinaEmbeddings(Embeddings):
         if not texts:
             return []
             
-        # Préparer la requête
-        payload = {
-            "input": texts,
-            "model": "jina-embeddings-v3",
-            "task_type": "retrieval.passage"  # Optimisé pour les documents
-        }
-        
-        # Envoyer la requête
-        response = requests.post(self.api_url, headers=self.headers, json=payload)
-        response.raise_for_status()
-        
-        # Extraire les embeddings
-        result = response.json()
-        return [item["embedding"] for item in result["data"]]
+        try:
+            # Préparer la requête avec le bon format
+            payload = {
+                "task": "retrieval.passage",
+                "model": "jina-embeddings-v3",
+                "texts": texts
+            }
+            
+            # Envoyer la requête
+            result = self._make_request(payload)
+            
+            # Extraire les embeddings
+            embeddings = [item["embedding"] for item in result["data"]]
+            logger.info(f"Embeddings générés pour {len(texts)} documents")
+            return embeddings
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération des embeddings pour les documents: {str(e)}")
+            raise
     
     def embed_query(self, text: str) -> List[float]:
         """Génère l'embedding pour une requête.
@@ -58,17 +89,22 @@ class JinaEmbeddings(Embeddings):
         Returns:
             Embedding (vecteur)
         """
-        # Préparer la requête
-        payload = {
-            "input": [text],
-            "model": "jina-embeddings-v3",
-            "task_type": "retrieval.query"  # Optimisé pour les requêtes
-        }
-        
-        # Envoyer la requête
-        response = requests.post(self.api_url, headers=self.headers, json=payload)
-        response.raise_for_status()
-        
-        # Extraire l'embedding
-        result = response.json()
-        return result["data"][0]["embedding"] 
+        try:
+            # Préparer la requête avec le bon format
+            payload = {
+                "task": "retrieval.query",
+                "model": "jina-embeddings-v3",
+                "texts": [text]
+            }
+            
+            # Envoyer la requête
+            result = self._make_request(payload)
+            
+            # Extraire l'embedding
+            embedding = result["data"][0]["embedding"]
+            logger.info("Embedding généré pour la requête")
+            return embedding
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la génération de l'embedding pour la requête: {str(e)}")
+            raise 
