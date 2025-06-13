@@ -30,6 +30,11 @@ from langchain_core.documents import Document
 langchain.llm_cache = SQLiteCache(database_path=os.path.join(os.path.dirname(__file__), ".langchain.db"))
 embedding_cache = {}
 
+# Initialisation du RAG au démarrage
+print("[LEAD_GRAPH_INIT] Initializing RAG chain...")
+_rag_chain_instance = setup_rag()
+print(f"[LEAD_GRAPH_INIT] RAG chain initialized: {_rag_chain_instance is not None}")
+
 def get_cached_embeddings(text: str, embeddings: JinaEmbeddings) -> List[float]:
     cache_key = f"embed_{hash(text)}"
     if cache_key in embedding_cache: return embedding_cache[cache_key]
@@ -163,23 +168,15 @@ def setup_rag():
         print(f"[LEAD_GRAPH_SETUP_RAG] Error during RAG component setup (embeddings, FAISS, etc.): {e}\n{traceback.format_exc()}")
         return None
 
-_rag_chain_instance = None
-_rag_chain_initialized = False
-
 def get_rag_chain():
-    global _rag_chain_instance, _rag_chain_initialized
-    if not _rag_chain_initialized:
-        print("[LEAD_GRAPH_LAZY_INIT] First call to get_rag_chain. Initializing RAG chain now.")
-        _rag_chain_instance = setup_rag() 
-        _rag_chain_initialized = True
-        print(f"[LEAD_GRAPH_LAZY_INIT] RAG chain initialization attempt complete. Instance is None: {_rag_chain_instance is None}")
+    """Retourne l'instance du RAG chain."""
     return _rag_chain_instance
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")
     if not os.getenv("GROQ_API_KEY"): print("Warning: GROQ_API_KEY not set.")
     
-    print("\n--- RAG Chain Lazy Load Test ---")
+    print("\n--- RAG Chain Test ---")
     test_rag_chain = get_rag_chain()
     if test_rag_chain:
         print("RAG chain obtained via get_rag_chain().")
