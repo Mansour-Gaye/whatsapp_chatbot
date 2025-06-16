@@ -82,7 +82,7 @@ def chat():
     except Exception as e:
         # Cette ligne est la plus importante pour le débogage : elle affichera l'erreur exacte dans vos logs Render
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
-        return jsonify({"status": "error", "response": "Désolé, une erreur s'est produite pendant la conversation."}), 500
+        return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
 
 @app.route("/api/lead", methods=["POST"])
 @log_requests
