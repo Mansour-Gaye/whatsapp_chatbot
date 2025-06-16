@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request, jsonify
+from flask_cors import CORS 
 from whatsapp_webhook import whatsapp
 # Ensure these can be imported AFTER lead_graph is confirmed to be importable
 # We might need to wrap these imports in a try-except too if lead_graph still has issues
@@ -16,6 +17,7 @@ except ImportError as e:
 from functools import wraps
 
 app = Flask(__name__)
+CORS(app)
 app.register_blueprint(whatsapp, url_prefix='/whatsapp')
 
 def log_requests(f):
