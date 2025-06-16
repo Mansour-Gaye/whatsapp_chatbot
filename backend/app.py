@@ -58,11 +58,25 @@ def chat():
         question = history[-1].get("content", "") if history else ""
 
         # On utilise l'historique traité ('processed_history') dans l'appel au modèle
+        
+           
+            
+           
+       
+        print(f"[API_CHAT_DEBUG] Type of processed_history: {type(processed_history)}")
+            if processed_history:
+        print(f"[API_CHAT_DEBUG] Type of first element in processed_history: {type(processed_history[0])}")
+        print(f"[API_CHAT_DEBUG] Content of processed_history: {processed_history}")
+            else:
+        print("[API_CHAT_DEBUG] processed_history is empty.")
+
+        print(f"[API_CHAT_DEBUG] Value of question: {question}")
+        print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
         response = llm.invoke({
-            "history": processed_history,
-            "question": question,
-            "company_name": "TRANSLAB INTERNATIONAL"
-        })
+             "history": processed_history,
+             "question": question,
+             "company_name": "TRANSLAB INTERNATIONAL"
+             })
         return jsonify({"status": "success", "response": response.content})
 
     except Exception as e:
