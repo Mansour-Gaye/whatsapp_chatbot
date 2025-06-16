@@ -46,7 +46,7 @@ def log_requests(f):
 @log_requests
 def chat():
     data = request.get_json()
-    history = data.get("history", [])
+    history = data.get("history", []) # This is the original list of dicts from the request
     if not history:
         return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
 
@@ -55,66 +55,65 @@ def chat():
             print("[API_CHAT] LLM or message components not available.")
             raise Exception("LLM not configured for chat API")
 
-        # --- Transformation de l'historique ---
-        processed_history = []
-        for msg_data in history:
+        # --- Transformation de l'historique pour LangChain ---
+        processed_history_for_llm = []
+        for msg_data in history: # Use original history for transforming for LLM
             role = msg_data.get("role", "").lower()
             content = msg_data.get("content", "")
             if role == "user":
-                processed_history.append(HumanMessage(content=content))
+                processed_history_for_llm.append(HumanMessage(content=content))
             elif role in ("assistant", "ai"):
-                processed_history.append(AIMessage(content=content))
+                processed_history_for_llm.append(AIMessage(content=content))
 
         # --- Prepend SystemMessage with company context ---
-        company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional." # Or any other instruction
-        processed_history.insert(0, SystemMessage(content=company_context))
+        company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional."
+        # Add SystemMessage to the list that goes to the LLM
+        processed_history_for_llm.insert(0, SystemMessage(content=company_context))
         # --- End of SystemMessage ---
 
-        question = history[-1].get("content", "") if history else ""
+        # question = history[-1].get("content", "") if history else "" # Not strictly needed if LLM uses the whole processed_history_for_llm
 
-        # --- Debugging Print Statements ---
-        print(f"[API_CHAT_DEBUG] Type of processed_history: {type(processed_history)}")
+        # --- Debugging Print Statements (Optional) ---
+        # print(f"[API_CHAT_DEBUG] Type of processed_history_for_llm: {type(processed_history_for_llm)}")
+        # if processed_history_for_llm:
+        #     print(f"[API_CHAT_DEBUG] Type of first element: {type(processed_history_for_llm[0])}")
+        # print(f"[API_CHAT_DEBUG] Content of processed_history_for_llm: {processed_history_for_llm}")
+        # --- End of Debugging ---
 
-        if processed_history:
-            print(f"[API_CHAT_DEBUG] Type of first element in processed_history: {type(processed_history[0])}")
-            print(f"[API_CHAT_DEBUG] Content of processed_history: {processed_history}")
-        else:
-            print("[API_CHAT_DEBUG] processed_history is empty.")
-
-        print(f"[API_CHAT_DEBUG] Value of question: {question}")
-        print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
-        # --- End of Debugging Print Statements ---
-
-        response = llm.invoke(processed_history) # CORRECT INVOKE
+        response = llm.invoke(processed_history_for_llm) 
 
         # --- Log conversation to Supabase ---
         if supabase_client:
             user_id_to_log = "web_chat_session_01" # Placeholder
             try:
-                # Log System Message
+                # 1. Log System Message (company_context)
                 system_message_data = {
                     "user_id": user_id_to_log,
                     "role": "system",
-                    "content": company_context
+                    "content": company_context 
                 }
                 supabase_client.table("conversations").insert(system_message_data).execute()
 
-                # Log User Message
-                user_message_data = {
-                    "user_id": user_id_to_log,
-                    "role": "user",
-                    "content": question
-                }
-                supabase_client.table("conversations").insert(user_message_data).execute()
+                # 2. Log all messages from the original incoming 'history'
+                for msg_data in history: # Iterate original history for logging
+                    role = msg_data.get("role", "unknown").lower()
+                    content = msg_data.get("content", "")
+                    message_to_log = {
+                        "user_id": user_id_to_log,
+                        "role": role,
+                        "content": content
+                    }
+                    supabase_client.table("conversations").insert(message_to_log).execute()
 
-                # Log Assistant Response
+                # 3. Log Assistant's final response
                 assistant_response_data = {
                     "user_id": user_id_to_log,
                     "role": "assistant",
                     "content": response.content
                 }
                 supabase_client.table("conversations").insert(assistant_response_data).execute()
-                print("[API_CHAT] Successfully logged conversation to Supabase.")
+                
+                print("[API_CHAT] Successfully logged full conversation turn to Supabase.")
             except Exception as e_log:
                 print(f"[API_CHAT] ERROR logging to Supabase: {e_log}")
         # --- End of Supabase logging ---
@@ -123,11 +122,10 @@ def chat():
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
-        # Note: User had "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE." here.
-        # Reverting to a more generic message or keeping theirs is a choice.
-        # For now, I'll keep their specific message if they put it there for a reason.
+        # Keeping your custom error message here as you might have a reason for it
         return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
 
+# --- /api/lead and health routes remain the same ---
 @app.route("/api/lead", methods=["POST"])
 @log_requests
 def lead():
