@@ -1,7 +1,8 @@
 import os
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from supabase import create_client, Client
+from flask_cors import CORS
+
 from whatsapp_webhook import whatsapp
 from functools import wraps
 
@@ -84,7 +85,7 @@ def chat():
         print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
         # --- End of Debugging Print Statements ---
 
-        response = llm.invoke(processed_history)
+        response = llm.invoke(processed_history) # CORRECT INVOKE
 
         # --- Log conversation to Supabase ---
         if supabase_client:
@@ -122,9 +123,11 @@ def chat():
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
+        # Note: User had "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE." here.
+        # Reverting to a more generic message or keeping theirs is a choice.
+        # For now, I'll keep their specific message if they put it there for a reason.
         return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
 
-# Le reste du fichier reste inchangé...
 @app.route("/api/lead", methods=["POST"])
 @log_requests
 def lead():
