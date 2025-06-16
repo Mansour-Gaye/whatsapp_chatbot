@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from supabase import create_client, Client
 from whatsapp_webhook import whatsapp
 from functools import wraps
 
@@ -18,6 +19,20 @@ except ImportError as e:
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(whatsapp, url_prefix='/whatsapp')
+
+# Supabase Client Initialization
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+supabase_client: Client = None # Type hint for clarity
+
+if supabase_url and supabase_key:
+    try:
+        supabase_client = create_client(supabase_url, supabase_key)
+        print("[APP_INIT] Successfully connected to Supabase.")
+    except Exception as e:
+        print(f"[APP_INIT] ERROR connecting to Supabase: {e}")
+else:
+    print("[APP_INIT] WARNING: SUPABASE_URL and/or SUPABASE_KEY environment variables not set. Supabase integration will be disabled.")
 
 def log_requests(f):
     """Un décorateur simple pour logger les requêtes (désactivé par défaut)."""
@@ -70,6 +85,39 @@ def chat():
         # --- End of Debugging Print Statements ---
 
         response = llm.invoke(processed_history)
+
+        # --- Log conversation to Supabase ---
+        if supabase_client:
+            user_id_to_log = "web_chat_session_01" # Placeholder
+            try:
+                # Log System Message
+                system_message_data = {
+                    "user_id": user_id_to_log,
+                    "role": "system",
+                    "content": company_context
+                }
+                supabase_client.table("conversations").insert(system_message_data).execute()
+
+                # Log User Message
+                user_message_data = {
+                    "user_id": user_id_to_log,
+                    "role": "user",
+                    "content": question
+                }
+                supabase_client.table("conversations").insert(user_message_data).execute()
+
+                # Log Assistant Response
+                assistant_response_data = {
+                    "user_id": user_id_to_log,
+                    "role": "assistant",
+                    "content": response.content
+                }
+                supabase_client.table("conversations").insert(assistant_response_data).execute()
+                print("[API_CHAT] Successfully logged conversation to Supabase.")
+            except Exception as e_log:
+                print(f"[API_CHAT] ERROR logging to Supabase: {e_log}")
+        # --- End of Supabase logging ---
+
         return jsonify({"status": "success", "response": response.content})
 
     except Exception as e:
