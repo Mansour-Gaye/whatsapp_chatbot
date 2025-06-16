@@ -10,7 +10,7 @@ services:
         value: 3.9.0
       - key: WHATSAPP_TOKEN
         sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
+      - key: WHATSAPP_PHONE_ID
         sync: false
       - key: VERIFY_TOKEN
         sync: false

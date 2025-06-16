@@ -1,6 +1,8 @@
 import os
 from flask import Flask, request, jsonify
+from supabase import create_client, Client
 from flask_cors import CORS
+
 from whatsapp_webhook import whatsapp
 from functools import wraps
 
@@ -18,6 +20,20 @@ except ImportError as e:
 app = Flask(__name__)
 CORS(app)
 app.register_blueprint(whatsapp, url_prefix='/whatsapp')
+
+# Supabase Client Initialization
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+supabase_client: Client = None # Type hint for clarity
+
+if supabase_url and supabase_key:
+    try:
+        supabase_client = create_client(supabase_url, supabase_key)
+        print("[APP_INIT] Successfully connected to Supabase.")
+    except Exception as e:
+        print(f"[APP_INIT] ERROR connecting to Supabase: {e}")
+else:
+    print("[APP_INIT] WARNING: SUPABASE_URL and/or SUPABASE_KEY environment variables not set. Supabase integration will be disabled.")
 
 def log_requests(f):
     """Un décorateur simple pour logger les requêtes (désactivé par défaut)."""
@@ -48,7 +64,7 @@ def chat():
                 processed_history.append(HumanMessage(content=content))
             elif role in ("assistant", "ai"):
                 processed_history.append(AIMessage(content=content))
-        
+
         # --- Prepend SystemMessage with company context ---
         company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional." # Or any other instruction
         processed_history.insert(0, SystemMessage(content=company_context))
@@ -58,7 +74,7 @@ def chat():
 
         # --- Debugging Print Statements ---
         print(f"[API_CHAT_DEBUG] Type of processed_history: {type(processed_history)}")
-        
+
         if processed_history:
             print(f"[API_CHAT_DEBUG] Type of first element in processed_history: {type(processed_history[0])}")
             print(f"[API_CHAT_DEBUG] Content of processed_history: {processed_history}")
@@ -68,15 +84,50 @@ def chat():
         print(f"[API_CHAT_DEBUG] Value of question: {question}")
         print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
         # --- End of Debugging Print Statements ---
-        
-        response = llm.invoke(processed_history)
+
+        response = llm.invoke(processed_history) # CORRECT INVOKE
+
+        # --- Log conversation to Supabase ---
+        if supabase_client:
+            user_id_to_log = "web_chat_session_01" # Placeholder
+            try:
+                # Log System Message
+                system_message_data = {
+                    "user_id": user_id_to_log,
+                    "role": "system",
+                    "content": company_context
+                }
+                supabase_client.table("conversations").insert(system_message_data).execute()
+
+                # Log User Message
+                user_message_data = {
+                    "user_id": user_id_to_log,
+                    "role": "user",
+                    "content": question
+                }
+                supabase_client.table("conversations").insert(user_message_data).execute()
+
+                # Log Assistant Response
+                assistant_response_data = {
+                    "user_id": user_id_to_log,
+                    "role": "assistant",
+                    "content": response.content
+                }
+                supabase_client.table("conversations").insert(assistant_response_data).execute()
+                print("[API_CHAT] Successfully logged conversation to Supabase.")
+            except Exception as e_log:
+                print(f"[API_CHAT] ERROR logging to Supabase: {e_log}")
+        # --- End of Supabase logging ---
+
         return jsonify({"status": "success", "response": response.content})
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
+        # Note: User had "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE." here.
+        # Reverting to a more generic message or keeping theirs is a choice.
+        # For now, I'll keep their specific message if they put it there for a reason.
         return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
 
-# Le reste du fichier reste inchangé...
 @app.route("/api/lead", methods=["POST"])
 @log_requests
 def lead():
@@ -87,16 +138,16 @@ def lead():
         if not LEAD_GRAPH_FOR_APP_IMPORTED or structured_llm is None or collect_lead_from_text is None:
             print("[API_LEAD] Lead processing components not available.")
             raise Exception("Lead components not configured for lead API")
-            
+
         lead_info = structured_llm.invoke(user_input)
-        
+
         if not any([lead_info.name, lead_info.email, lead_info.phone]):
             return jsonify({"status": "error", "message": "Informations manquantes. Merci de fournir nom, email ou téléphone."}), 400
-            
+
         if save_flag:
             collect_lead_from_text(user_input)
             print("[APP.PY] save_lead_to_drive call is temporarily disabled.")
-            
+
         return jsonify({"status": "success", "lead": lead_info.model_dump()})
 
     except Exception as e:
@@ -112,8 +163,3 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     is_debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     app.run(debug=is_debug, host="0.0.0.0", port=port)
-
-
-
-
-
