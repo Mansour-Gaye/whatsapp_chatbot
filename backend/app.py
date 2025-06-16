@@ -94,7 +94,7 @@ def lead():
 
     except Exception as e:
         print(f"[API_LEAD] Erreur dans /api/lead: {str(e)}")
-        return jsonify({"status": "error", "message": f"Erreur lors du traitement des informations de lead: {e}"}), 500
+        return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
 
 @app.route("/health")
 def health():
