@@ -66,12 +66,8 @@ def chat():
         print(f"[API_CHAT_DEBUG] Value of question: {question}")
         print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
         # --- Fin du bloc de débogage ---
-
-        response = llm.invoke({
-             "history": processed_history,
-             "question": question,
-             "company_name": "TRANSLAB INTERNATIONAL"
-        })
+        
+        response = llm.invoke(processed_history)
         return jsonify({"status": "success", "response": response.content})
 
     except Exception as e:
