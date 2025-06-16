@@ -1,12 +1,14 @@
 import os
 from flask import Flask, request, jsonify
-from flask_cors import CORS 
+from flask_cors import CORS # Added for CORS
 from whatsapp_webhook import whatsapp
+
 # Ensure these can be imported AFTER lead_graph is confirmed to be importable
 # We might need to wrap these imports in a try-except too if lead_graph still has issues
 # For now, assuming lead_graph will be fine with lazy RAG
 try:
     from lead_graph import structured_llm, collect_lead_from_text, llm, Lead
+    from langchain_core.messages import HumanMessage, AIMessage # Added for history fix
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported structured_llm, collect_lead_from_text, llm, Lead from lead_graph.")
 except ImportError as e:
@@ -17,7 +19,7 @@ except ImportError as e:
 from functools import wraps
 
 app = Flask(__name__)
-CORS(app)
+CORS(app) # Initialized CORS
 app.register_blueprint(whatsapp, url_prefix='/whatsapp')
 
 def log_requests(f):
@@ -31,16 +33,34 @@ def log_requests(f):
 @log_requests
 def chat():
     data = request.get_json()
-    history = data.get("history", [])
+    history = data.get("history", []) # This is a list of dicts
     if not history: return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
+    
     try:
         if not LEAD_GRAPH_FOR_APP_IMPORTED or llm is None: 
             print("[API_CHAT] LLM not available for app route.")
             raise Exception("LLM not configured for chat API")
-        response = llm.invoke({"history": history, "question": history[-1].get("content", ""), "company_name": "TRANSLAB INTERNATIONAL"})
+
+        # --- History transformation for LangChain ---
+        processed_history = []
+        for msg_data in history:
+            role = msg_data.get("role", "").lower()
+            content = msg_data.get("content", "")
+            if role == "user":
+                processed_history.append(HumanMessage(content=content))
+            elif role == "assistant" or role == "ai": # Handling common AI role names
+                processed_history.append(AIMessage(content=content))
+            # You could add SystemMessage handling here if your app uses it
+        # --- End of history transformation ---
+        
+        # Make sure 'question' is still the content of the last message in the original history list
+        question = history[-1].get("content", "") if history else ""
+
+        # Use processed_history for the llm.invoke call
+        response = llm.invoke({"history": processed_history, "question": question, "company_name": "TRANSLAB INTERNATIONAL"})
         return jsonify({"status": "success", "response": response.content})
     except Exception as e:
-        print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
+        print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}") # This will print the actual error to Render logs
         return jsonify({"status": "error", "response": "Désolé, une erreur s'est produite pendant la conversation."}), 500
 
 @app.route("/api/lead", methods=["POST"])
