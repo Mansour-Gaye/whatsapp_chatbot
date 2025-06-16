@@ -7,7 +7,7 @@ from functools import wraps
 # --- Section d'importation des modules de traitement ---
 try:
     from lead_graph import structured_llm, collect_lead_from_text, llm, Lead
-    from langchain_core.messages import HumanMessage, AIMessage
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
 except ImportError as e:
@@ -49,23 +49,25 @@ def chat():
             elif role in ("assistant", "ai"):
                 processed_history.append(AIMessage(content=content))
         
+        # --- Prepend SystemMessage with company context ---
+        company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional." # Or any other instruction
+        processed_history.insert(0, SystemMessage(content=company_context))
+        # --- End of SystemMessage ---
+
         question = history[-1].get("content", "") if history else ""
 
-        # --- Début du bloc de débogage avec indentation corrigée ---
+        # --- Debugging Print Statements ---
         print(f"[API_CHAT_DEBUG] Type of processed_history: {type(processed_history)}")
         
-        # INDENTATION CORRIGÉE ICI : 'if' doit être au même niveau que le 'print' précédent.
         if processed_history:
-            # INDENTATION CORRIGÉE ICI : ces 'print' doivent être indentés sous le 'if'.
             print(f"[API_CHAT_DEBUG] Type of first element in processed_history: {type(processed_history[0])}")
             print(f"[API_CHAT_DEBUG] Content of processed_history: {processed_history}")
         else:
-            # INDENTATION CORRIGÉE ICI : ce 'print' doit être indenté sous le 'else'.
             print("[API_CHAT_DEBUG] processed_history is empty.")
 
         print(f"[API_CHAT_DEBUG] Value of question: {question}")
         print(f"[API_CHAT_DEBUG] Type of question: {type(question)}")
-        # --- Fin du bloc de débogage ---
+        # --- End of Debugging Print Statements ---
         
         response = llm.invoke(processed_history)
         return jsonify({"status": "success", "response": response.content})
@@ -110,5 +112,8 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     is_debug = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     app.run(debug=is_debug, host="0.0.0.0", port=port)
+
+
+
 
 
