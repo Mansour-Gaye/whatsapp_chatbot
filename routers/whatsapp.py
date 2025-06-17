@@ -15,6 +15,8 @@ from schemas import cart as cart_schema
 
 # NLP imports
 from nlp.nlp_processor import extract_shoe_entities
+# Image Matching Service import
+from services import image_matching_service
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=config.LOGGING_LEVEL)
@@ -140,8 +142,7 @@ async def receive_whatsapp_message(
                                 logger.info(f"NLP extracted criteria: {extracted_criteria}")
 
                                 if extracted_criteria: # If NLP found something relevant
-                                    # Using a default limit for NLP results display
-                                    await handle_products_command(db, sender_wa_id, offset=0, limit=3, search_criteria=extracted_criteria)
+                                    await handle_products_command(db, sender_wa_id, offset=0, limit=3, search_criteria=extracted_criteria, customer_id=customer.id)
                                 else:
                                     # 2. Fallback to basic command parsing
                                     response_text = f"Je n'ai pas bien compris. Pouvez-vous reformuler ou essayer des commandes comme '/products'?" # Default if no NLP and no command
@@ -150,7 +151,42 @@ async def receive_whatsapp_message(
                                         await send_whatsapp_message(sender_wa_id, response_text)
                                     elif message_text == "/products":
                                         # General product listing without specific NLP criteria
-                                        await handle_products_command(db, sender_wa_id, offset=0, limit=3, search_criteria=None)
+                                        await handle_products_command(db, sender_wa_id, offset=0, limit=3, search_criteria=None, customer_id=customer.id)
+                                    elif message_text == "/popular" or message_text == "tendances":
+                                        popular_shoes = crud.get_popular_shoes(db, limit=5)
+                                        if popular_shoes:
+                                            response_lines = ["Voici nos articles les plus populaires en ce moment :"]
+                                            for shoe in popular_shoes:
+                                                response_lines.append(f"- {shoe.name} ({shoe.brand}): {shoe.price} XOF")
+                                            await send_whatsapp_message(sender_wa_id, "\n".join(response_lines))
+                                        else:
+                                            await send_whatsapp_message(sender_wa_id, "Je n'ai pas pu déterminer les articles populaires pour le moment. Essayez plus tard !")
+                                    elif message_text in ["/foryou", "/recommendations", "suggestions", "pour vous"]:
+                                        preferences = crud.get_user_attribute_preferences(db, customer_id=customer.id)
+                                        if not preferences or not any([preferences.get("categories"), preferences.get("brands"), preferences.get("colors")]):
+                                            await send_whatsapp_message(sender_wa_id, "Je n'ai pas encore assez d'informations sur vos goûts pour des suggestions très personnalisées. Parcourez nos produits avec '/products' ou essayez '/popular' pour voir les tendances !")
+                                        else:
+                                            recommendations = crud.get_content_based_recommendations(db, preferences=preferences, limit=3)
+                                            if recommendations:
+                                                response_lines = ["Voici quelques suggestions basées sur vos goûts :"]
+                                                feedback_buttons = []
+                                                for i, shoe in enumerate(recommendations):
+                                                    response_lines.append(f"{i+1}. {shoe.name} ({shoe.brand}, {shoe.color}) - {shoe.price} XOF")
+                                                    # For Pydantic v2, model_config = {"from_attributes": True} is needed for Shoe model if not already there for this to work seamlessly
+                                                    if len(feedback_buttons) < 2: # Max 3 buttons, leave one for "Pas pour moi"
+                                                        feedback_buttons.append({"id": f"refine_more_{shoe.id}", "title": f"Plus comme #{i+1}"})
+
+                                                await send_whatsapp_message(sender_wa_id, "\n".join(response_lines))
+
+                                                if feedback_buttons: # Only send feedback buttons if there were recommendations
+                                                    feedback_buttons.append({"id": "refine_less_all", "title": "Pas pour moi"})
+                                                    await send_interactive_message(
+                                                        recipient_id=sender_wa_id,
+                                                        body_text="Ces suggestions vous plaisent-elles ou souhaitez-vous affiner ?",
+                                                        buttons=feedback_buttons
+                                                    )
+                                            else:
+                                                await send_whatsapp_message(sender_wa_id, "Je n'ai pas trouvé de nouvelles recommandations pour vous pour le moment. Découvrez nos nouveautés avec '/products' !")
                                     else: # Default non-understanding message
                                         await send_whatsapp_message(sender_wa_id, response_text)
 
@@ -191,7 +227,8 @@ async def receive_whatsapp_message(
 
                                         # For this iteration, view_more and prev_page will only work for general browsing,
                                         # not for paginating NLP search results, as per subtask note.
-                                        await handle_products_command(db, sender_wa_id, offset=offset, limit=limit, search_criteria=None)
+                                        # Pass customer.id if these buttons should also potentially trigger updates or personalized content
+                                        await handle_products_command(db, sender_wa_id, offset=offset, limit=limit, search_criteria=None, customer_id=customer.id)
                                     except Exception as e:
                                         logger.error(f"Error parsing view_more button ID '{button_id}': {e}")
                                         await send_whatsapp_message(sender_wa_id, "Sorry, I couldn't process that 'View More' request.")
@@ -201,42 +238,77 @@ async def receive_whatsapp_message(
                                     try:
                                         offset = int(parts[2])
                                         limit = int(parts[4])
-                                        # Similar to view_more, keeping pagination for generic browsing for now
-                                        await handle_products_command(db, sender_wa_id, offset=max(0, offset), limit=limit, search_criteria=None)
+                                        await handle_products_command(db, sender_wa_id, offset=max(0, offset), limit=limit, search_criteria=None, customer_id=customer.id)
                                     except Exception as e:
                                         logger.error(f"Error parsing prev_page button ID '{button_id}': {e}")
                                         await send_whatsapp_message(sender_wa_id, "Sorry, I couldn't process that 'Previous Page' request.")
                                 else:
                                     logger.warning(f"Unhandled button ID: {button_id}")
                                     await send_whatsapp_message(sender_wa_id, "Sorry, I didn't understand that button click.")
+
+                            # --- Image Message Handling ---
+                            elif message.get("type") == "image":
+                                image_id = message.get("image", {}).get("id")
+                                if image_id:
+                                    logger.info(f"Received image message from {sender_wa_id} with media ID: {image_id}")
+                                    await send_whatsapp_message(sender_wa_id, "J'analyse votre image, un instant... 🖼️")
+
+                                    try:
+                                        matching_shoes = image_matching_service.find_shoes_by_image_style(db, image_identifier=image_id, limit=3)
+                                        if matching_shoes:
+                                            response_lines = ["Voici des chaussures qui pourraient correspondre au style de votre image :"]
+                                            for shoe in matching_shoes:
+                                                response_lines.append(f"- {shoe.name} ({shoe.brand}, {shoe.color}): {shoe.price} XOF")
+                                            # TODO: Potentially use handle_products_command for richer display and actions
+                                            await send_whatsapp_message(sender_wa_id, "\n".join(response_lines))
+
+                                            # Update last viewed for the first recommended item from image search
+                                            if customer and matching_shoes:
+                                                crud.update_last_viewed_products(db, customer_id=customer.id, product_id=matching_shoes[0].id)
+                                        else:
+                                            await send_whatsapp_message(sender_wa_id, "Je n'ai pas trouvé de chaussures correspondantes dans notre catalogue pour le moment. Essayez une autre image ou une recherche par texte.")
+                                    except Exception as e:
+                                        logger.error(f"Error during image style matching for image ID {image_id}: {e}")
+                                        await send_whatsapp_message(sender_wa_id, "Désolé, une erreur s'est produite lors de l'analyse de votre image.")
+                                else:
+                                    logger.warning(f"Received image message from {sender_wa_id} but no image ID found.")
+                                    await send_whatsapp_message(sender_wa_id, "J'ai reçu une image, mais je n'ai pas pu l'analyser. Veuillez réessayer.")
                             else:
-                                logger.info(f"Received non-text, non-interactive_button_reply message type: {message.get('type')}")
-                                await send_whatsapp_message(sender_wa_id, "Sorry, I can only process text messages and button clicks for now.")
+                                logger.info(f"Received unhandled message type: {message.get('type')}")
+                                await send_whatsapp_message(sender_wa_id, "Désolé, je ne peux traiter que les messages texte, les images et les clics sur les boutons pour le moment.")
 
     return Response(status_code=200, content="EVENT_RECEIVED") # Acknowledge receipt to WhatsApp
 
 
-async def handle_products_command(db: Session, recipient_wa_id: str, offset: int, limit: int, search_criteria: Optional[dict] = None):
+async def handle_products_command(db: Session, recipient_wa_id: str, offset: int, limit: int, search_criteria: Optional[dict] = None, customer_id: Optional[int] = None, exclude_shoe_ids: Optional[List[int]] = None):
     """
     Fetches products (either general or based on search_criteria) and sends them.
-    For NLP search results (if search_criteria is provided), pagination is currently simplified:
-    it shows the first page and does not include "View More" / "Previous" buttons for that specific search.
+    Can exclude specific shoe_ids from results.
+    For NLP search results, pagination is simplified.
+    If customer_id and search_criteria are provided and shoes are found, updates last_viewed_products.
     """
-    logger.info(f"Handling products display for {recipient_wa_id}, offset={offset}, limit={limit}, criteria={search_criteria}")
+    logger.info(f"Handling products display for {recipient_wa_id} (customer_id: {customer_id}), offset={offset}, limit={limit}, criteria={search_criteria}, exclude_ids={exclude_shoe_ids}")
 
     if search_criteria:
-        shoes = crud.search_shoes_by_criteria(db, criteria=search_criteria, skip=offset, limit=limit)
-        # For NLP results, we currently don't implement pagination via buttons to keep it simple.
-        # So, total_shoes_count and pagination buttons are only for general browsing.
-        total_shoes_count = len(shoes) # Or, count all matching criteria if we were to paginate NLP
+        shoes = crud.search_shoes_by_criteria(db, criteria=search_criteria, skip=offset, limit=limit, exclude_ids=exclude_shoe_ids)
+        total_shoes_count = len(shoes) # This count is only for the current filtered list if not paginating NLP fully
         is_nlp_search = True
         if not shoes:
             await send_whatsapp_message(recipient_wa_id, "Désolé, je n'ai rien trouvé pour ces critères. Essayez autre chose ?")
             return
         product_message_body = "Voici les résultats pour votre recherche :\n"
 
+        # Update last viewed products if this is an NLP search and we have a customer ID and products
+        if customer_id and shoes:
+            try:
+                # Log the first product as viewed for this search
+                crud.update_last_viewed_products(db, customer_id=customer_id, product_id=shoes[0].id)
+                logger.info(f"Updated last viewed products for customer {customer_id} with shoe {shoes[0].id}")
+            except Exception as e:
+                logger.error(f"Error updating last_viewed_products for customer {customer_id}: {e}")
+
     else: # General browsing
-        shoes = crud.get_shoes(db, skip=offset, limit=limit)
+        shoes = crud.get_shoes(db, skip=offset, limit=limit) # get_shoes doesn't currently support exclude_ids, would need update if generic product view needs it.
         total_shoes_count = db.query(database.Shoe).count() # Total for general browsing
         is_nlp_search = False
         if not shoes:

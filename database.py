@@ -27,6 +27,7 @@ class Customer(Base):
     whatsapp_id = Column(String, unique=True, index=True)
     name = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_viewed_product_ids = Column(Text, default="[]") # Store as JSON string
 
     orders = relationship("Order", back_populates="customer")
     cart = relationship("Cart", back_populates="customer", uselist=False)
