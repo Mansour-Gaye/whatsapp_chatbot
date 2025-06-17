@@ -227,3 +227,34 @@ async def send_interactive_message(
     except Exception as e:
         logger.error(f"An unexpected error occurred in send_interactive_message: {e}")
         return False
+
+async def send_order_status_update_notification(
+    recipient_wa_id: str,
+    order_id: int,
+    new_status: str,
+    lang: str, # Added lang parameter
+    order_details: Optional[Any] = None
+) -> bool:
+    """
+    Sends a localized order status update notification to the customer.
+    """
+    # Key for the main subject/title part of the message
+    subject_key = "order_status_notification_subject"
+    subject_text = get_localized_string(lang, subject_key, order_id=order_id)
+
+    # Key for the specific status message
+    status_message_key = f"order_status_{new_status}"
+    message_text = get_localized_string(lang, status_message_key, order_id=order_id, status=new_status) # status for unknown
+
+    # If the specific key for a status (e.g. order_status_shipped) is not found,
+    # get_localized_string will fall back to default lang, then to the key itself.
+    # If the key itself is returned, it means we don't have a specific translation for that status.
+    # In such a case, we use the "order_status_unknown" as a template.
+    if message_text == status_message_key: # Key was not found in translations
+        logger.warning(f"Specific status key '{status_message_key}' not found for lang '{lang}'. Using generic status update.")
+        message_text = get_localized_string(lang, "order_status_unknown", order_id=order_id, status=new_status)
+
+    full_message = f"{subject_text}\n\n{message_text}"
+
+    logger.info(f"Sending order status update for order {order_id} (status: {new_status}, lang: {lang}) to {recipient_wa_id}: {full_message}")
+    return await send_whatsapp_message(recipient_wa_id, full_message)

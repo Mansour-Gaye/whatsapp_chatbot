@@ -28,6 +28,14 @@ class Customer(Base):
     name = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_viewed_product_ids = Column(Text, default="[]") # Store as JSON string
+    preferred_language = Column(String(5), default='fr', nullable=False) # e.g., 'fr', 'en'
+    loyalty_points = Column(Integer, default=0, nullable=False)
+
+
+    __table_args__ = (
+        CheckConstraint(preferred_language.in_(['fr', 'en']), name='check_preferred_language'),
+        CheckConstraint(loyalty_points >= 0, name='check_loyalty_points_non_negative') # Ensure points are not negative
+    )
 
     orders = relationship("Order", back_populates="customer")
     cart = relationship("Cart", back_populates="customer", uselist=False)

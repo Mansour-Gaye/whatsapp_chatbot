@@ -14,6 +14,8 @@ class CustomerBase(BaseModel):
     whatsapp_id: str
     name: Optional[str] = None
     last_viewed_product_ids: List[int] = []
+    preferred_language: Optional[str] = 'fr'
+    loyalty_points: Optional[int] = 0
 
 
 class CustomerCreate(CustomerBase):

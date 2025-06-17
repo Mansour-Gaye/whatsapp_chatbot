@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 # Basic config if not configured globally, though FastAPI typically handles this.
 # logging.basicConfig(level=logging.INFO) # Potentially redundant if FastAPI configures root logger.
 
+from typing import List, Tuple # Moved here for proper organization
+
 import schemas.shoe as shoe_schema
 import schemas.cart as cart_schema
 import schemas.order as order_schema
@@ -510,6 +512,235 @@ def get_content_based_recommendations(db: Session, preferences: dict, limit: int
 
     logger.info(f"Generated {len(recommended_shoes)} content-based recommendations. Top score: {scored_shoes[0]['score'] if scored_shoes else 0}")
     return recommended_shoes
+
+def get_distinct_categories(db: Session) -> List[str]:
+    """
+    Fetches a list of distinct (non-null) categories from the Shoe table.
+    """
+    distinct_categories_query = db.query(database.Shoe.category).filter(database.Shoe.category.isnot(None)).distinct().all()
+    categories = [category[0] for category in distinct_categories_query if category[0]] # Ensure category[0] is not None or empty
+    logger.info(f"Found distinct categories: {categories}")
+    return categories
+
+# --- Loyalty Points CRUD ---
+def add_loyalty_points(db: Session, customer_id: int, points_to_add: int) -> Optional[database.Customer]:
+    """Adds loyalty points to a customer's balance."""
+    if points_to_add <= 0: # Usually points are positive, but good to handle
+        logger.info(f"No points to add for customer {customer_id} (points_to_add: {points_to_add}).")
+        # return get_customer(db, customer_id) # Return customer without change if 0 or negative points
+        # Or better, just don't proceed if points are not positive.
+        # For now, let's assume points_to_add will be > 0 from business logic.
+        pass
+
+    customer = get_customer(db, customer_id=customer_id)
+    if customer:
+        customer.loyalty_points = (customer.loyalty_points or 0) + points_to_add # Ensure current points are not None
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        logger.info(f"Added {points_to_add} loyalty points to customer {customer_id}. New balance: {customer.loyalty_points}")
+        return customer
+    logger.warning(f"Customer {customer_id} not found. Could not add loyalty points.")
+    return None
+
+def get_customer_loyalty_points(db: Session, customer_id: int) -> Optional[int]:
+    """Fetches the loyalty points for a specific customer."""
+    customer = get_customer(db, customer_id=customer_id)
+    if customer:
+        return customer.loyalty_points
+    logger.warning(f"Customer {customer_id} not found when trying to fetch loyalty points.")
+    return None # Or 0 if preferred when customer not found, but None indicates absence
+
+def update_customer_language(db: Session, customer_id: int, lang_code: str) -> Optional[database.Customer]:
+    """
+    Updates the preferred_language for a customer.
+    Validates lang_code against allowed languages ('fr', 'en').
+    """
+    if lang_code not in ['fr', 'en']:
+        logger.warning(f"Invalid language code '{lang_code}' provided for customer {customer_id}.")
+        return None # Or raise ValueError
+
+    customer = get_customer(db, customer_id=customer_id)
+    if customer:
+        customer.preferred_language = lang_code
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        logger.info(f"Customer {customer_id} preferred language updated to '{lang_code}'.")
+        return customer
+    logger.warning(f"Customer {customer_id} not found, could not update language preference.")
+    return None
+
+def update_order_status(db: Session, order_id: int, new_status: str) -> Optional[database.Order]:
+    """
+    Updates the status of an order.
+    Returns the updated Order object or None if the order is not found.
+    """
+    order = db.query(database.Order).filter(database.Order.id == order_id).first()
+    if order:
+        order.status = new_status
+        db.add(order) # Add to session to mark as dirty
+        db.commit()
+        db.refresh(order)
+        logger.info(f"Order {order_id} status updated to {new_status}.")
+        return order
+    else:
+        logger.warning(f"Attempted to update status for non-existent order {order_id}.")
+        return None
+
+def get_last_completed_order_for_customer(db: Session, customer_id: int) -> Optional[database.Order]:
+    """
+    Fetches the most recent 'completed' order for a customer.
+    If no 'completed' order, falls back to the most recent order regardless of status.
+    Eagerly loads OrderItems and their associated Shoe details.
+    """
+    from sqlalchemy.orm import joinedload
+
+    # Try to get the last 'completed' order first
+    last_order = (
+        db.query(database.Order)
+        .filter(database.Order.customer_id == customer_id, database.Order.status == "completed")
+        .order_by(database.Order.created_at.desc())
+        .options(
+            joinedload(database.Order.items).joinedload(database.OrderItem.shoe)
+        )
+        .first()
+    )
+
+    if not last_order:
+        # If no 'completed' order, get the most recent order by date, regardless of status
+        logger.info(f"No 'completed' order found for customer {customer_id}. Fetching most recent order by date.")
+        last_order = (
+            db.query(database.Order)
+            .filter(database.Order.customer_id == customer_id)
+            .order_by(database.Order.created_at.desc())
+            .options(
+                joinedload(database.Order.items).joinedload(database.OrderItem.shoe)
+            )
+            .first()
+        )
+
+    if last_order:
+        logger.info(f"Last order for customer {customer_id} (Order ID: {last_order.id}, Status: {last_order.status}) found with {len(last_order.items)} items.")
+    else:
+        logger.info(f"No orders found for customer {customer_id}.")
+
+    return last_order
+
+# Define simple data structures for check_items_availability_and_price (conceptually)
+# For actual implementation, we'll use dicts, but these define the expected keys.
+# class OrderItemData(TypedDict):
+#     shoe_id: int
+#     quantity: int
+#     original_price: float
+#     original_name: str # For reference if item changed
+#     original_brand: str # For reference
+
+# class VerifiedItemData(TypedDict):
+#     shoe_id: int
+#     quantity: int
+#     current_price: float
+#     current_name: str
+#     current_brand: str
+#     available_stock: int # Current available stock of the shoe
+
+# class IssueItemData(TypedDict):
+#     shoe_id: int
+#     original_name: str
+#     original_brand: str
+#     quantity: int # Quantity from the original order
+#     reason: str # e.g., "out_of_stock", "price_changed_significantly", "item_not_found", "insufficient_stock"
+#     details: Optional[dict] # e.g., {"old_price": X, "new_price": Y} or {"available": X}
+
+def check_items_availability_and_price(
+    db: Session,
+    order_items_data: List[dict] # Expects list of dicts matching OrderItemData concept
+) -> tuple[List[dict], List[dict], float]:
+    """
+    Checks availability and current price of items from a previous order.
+    order_items_data: List of dicts, each with 'shoe_id', 'quantity', 'original_price', 'original_name', 'original_brand'.
+    Returns: (verified_items, issue_items, new_total_price_for_verified)
+    """
+    verified_items: List[dict] = []
+    issue_items: List[dict] = []
+    new_total_price_for_verified: float = 0.0
+
+    # Define a threshold for significant price change, e.g., 20% increase
+    PRICE_CHANGE_SIGNIFICANT_THRESHOLD_PERCENT = 20.0
+
+    for item_data in order_items_data:
+        shoe = get_shoe(db, shoe_id=item_data["shoe_id"])
+
+        if not shoe:
+            issue_items.append({
+                "shoe_id": item_data["shoe_id"],
+                "original_name": item_data["original_name"],
+                "original_brand": item_data["original_brand"],
+                "quantity": item_data["quantity"],
+                "reason": "item_not_found",
+                "details": None
+            })
+            continue
+
+        # Check stock
+        if shoe.quantity_available == 0:
+            issue_items.append({
+                "shoe_id": shoe.id,
+                "original_name": item_data["original_name"],
+                "original_brand": item_data["original_brand"],
+                "quantity": item_data["quantity"],
+                "reason": "out_of_stock",
+                "details": {"available": 0}
+            })
+            continue
+        elif shoe.quantity_available < item_data["quantity"]:
+            issue_items.append({
+                "shoe_id": shoe.id,
+                "original_name": item_data["original_name"],
+                "original_brand": item_data["original_brand"],
+                "quantity": item_data["quantity"],
+                "reason": "insufficient_stock",
+                "details": {"available": shoe.quantity_available, "requested": item_data["quantity"]}
+            })
+            # Option: could add the available quantity to verified_items if partial fulfillment is allowed
+            # For now, marking the whole original quantity as an issue if not fully available.
+            continue
+
+        # Check price change
+        price_change_percent = 0
+        if item_data["original_price"] > 0: # Avoid division by zero if original price was 0
+            price_change_percent = ((shoe.price - item_data["original_price"]) / item_data["original_price"]) * 100
+        elif shoe.price > 0: # Original price was 0, new price is not
+            price_change_percent = float('inf') # Effectively a significant change
+
+        if price_change_percent > PRICE_CHANGE_SIGNIFICANT_THRESHOLD_PERCENT:
+            issue_items.append({
+                "shoe_id": shoe.id,
+                "original_name": item_data["original_name"],
+                "original_brand": item_data["original_brand"],
+                "quantity": item_data["quantity"],
+                "reason": "price_changed_significantly",
+                "details": {"old_price": item_data["original_price"], "new_price": shoe.price, "percent_change": price_change_percent}
+            })
+            # Depending on policy, this could still be a verified item if user accepts.
+            # For now, marking as an issue for user review.
+            continue
+
+        # If all checks pass, it's a verified item for reorder
+        verified_items.append({
+            "shoe_id": shoe.id,
+            "quantity": item_data["quantity"], # Use original quantity for reorder
+            "current_price": shoe.price,
+            "current_name": shoe.name,
+            "current_brand": shoe.brand,
+            "available_stock": shoe.quantity_available,
+            "original_price": item_data["original_price"], # Keep for reference
+            "price_change_percent": price_change_percent # Can be slightly negative (cheaper) or small positive
+        })
+        new_total_price_for_verified += shoe.price * item_data["quantity"]
+
+    return verified_items, issue_items, new_total_price_for_verified
+
 
 # Modify search_shoes_by_criteria to accept exclude_ids
 def search_shoes_by_criteria(db: Session, criteria: dict, skip: int = 0, limit: int = 100, exclude_ids: Optional[list[int]] = None) -> list[database.Shoe]:
