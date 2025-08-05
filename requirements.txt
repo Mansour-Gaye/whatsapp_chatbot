@@ -28,5 +28,9 @@ requests
 # --- PostgreSQL ---
 supabase==1.0.3
 
+pdfplumber 
+python-docx
+
+
 
 

@@ -18,6 +18,10 @@ from langchain_core.documents import Document
 import json
 import logging
 from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
