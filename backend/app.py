@@ -157,6 +157,8 @@ def health():
     """Route pour vérifier que le service est en ligne."""
     return jsonify({"status": "healthy"}), 200
 
+from flask import send_from_directory
+
 @app.route("/chatbot")
 def chatbot_page():
     return send_from_directory("static", "index.html")
