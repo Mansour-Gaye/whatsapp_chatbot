@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Hôte de la Chatbox</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        main {
+            max-width: 70ch;
+            margin: auto;
+        }
+        h1 {
+            color: #1c1c1e;
+        }
+        p {
+            color: #3a3a3c;
+        }
+        code {
+            background-color: #e2e2e2;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+        }
+        .iframe-container {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            max-width: 450px; /* Largeur max pour la vue desktop */
+            max-height: 700px; /* Hauteur max pour la vue desktop */
+            z-index: 1000;
+            pointer-events: none; /* Laisse passer les clics vers la page en dessous */
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            pointer-events: auto; /* Capture les clics à l'intérieur de l'iframe */
+        }
+    </style>
+</head>
+<body>
+
+    <main>
+        <h1>Page d'Exemple pour l'Intégration de la Chatbox</h1>
+        <p>
+            Ceci est une page web standard qui sert de conteneur pour notre composant de chatbox.
+            La chatbox elle-même est chargée dans une <code>iframe</code> en bas à droite de l'écran.
+        </p>
+        <p>
+            La configuration (couleur, titre, etc.) est passée directement à l'iframe via des <strong>paramètres d'URL</strong>.
+            C'est une méthode d'intégration robuste qui garantit que la chatbox est bien isolée du reste de la page.
+        </p>
+        <p>
+            Essayez de modifier les paramètres dans le <code>src</code> de l'<code>iframe</code> ci-dessous, par exemple :
+            <code>?primaryColor=ff5733&position=bottom-left</code>
+        </p>
+    </main>
+
+    <!--
+      INTÉGRATION DE LA CHATBOX VIA IFRAME
+      - Le 'src' pointe vers le fichier HTML de la chatbox.
+      - Les paramètres d'URL sont utilisés pour la configuration.
+    -->
+    <div class="iframe-container">
+        <iframe src="./chatbot.html?primaryColor=5A3E8A&title=Mon Assistant"
+                title="Chatbox Assistant">
+        </iframe>
+    </div>
+
+</body>
+</html>
