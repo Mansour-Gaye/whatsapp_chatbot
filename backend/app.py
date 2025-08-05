@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from supabase import create_client, Client
 from flask_cors import CORS
 
@@ -156,6 +156,10 @@ def lead():
 def health():
     """Route pour vérifier que le service est en ligne."""
     return jsonify({"status": "healthy"}), 200
+
+@app.route("/chatbot")
+def chatbot_page():
+    return send_from_directory("static", "index.html")
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
