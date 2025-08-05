@@ -11,10 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultConfig = {
         position: 'bottom-right', // ou 'bottom-left'
         mode: 'floating',         // ou 'fullscreen'
+
         assetBasePath: '',        // ex: '/static/img/chatbot/'
         theme: {
             primary: '#007bff',
             userMessageBg: '#007bff',
+
         },
         header: {
             title: 'Assistant IA',
@@ -34,12 +36,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
 
+
     let chatHistory = [];
     let config = {};
+
 
     // =================================================================================
     //  FONCTIONS DE RENDU (Construction de l'interface)
     // =================================================================================
+
 
     function renderQuickReplies(replies) {
         const container = document.createElement('div');
@@ -54,18 +59,21 @@ document.addEventListener('DOMContentLoaded', () => {
         chatboxMessages.appendChild(container);
     }
 
+
     function createCard(cardData) {
         const cardContainer = document.createElement('div');
         cardContainer.classList.add('card-container');
 
         if (cardData.imageUrl) {
             const img = document.createElement('img');
+
             // Préfixe l'URL de l'image avec la base si elle est relative
             if (cardData.imageUrl.startsWith('/')) {
                  img.src = `${config.assetBasePath}${cardData.imageUrl}`;
             } else {
                  img.src = cardData.imageUrl;
             }
+
             img.alt = cardData.title || 'Card Image';
             cardContainer.appendChild(img);
         }
@@ -96,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cardContainer.appendChild(cardBody);
         return cardContainer;
     }
+
 
     function renderMessage(messageData) {
         const { text, sender, timestamp, options = {}, isHistory } = messageData;
@@ -145,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //  FONCTIONS DE LOGIQUE (Gestion des actions)
     // =================================================================================
 
+
     function addMessage(text, sender, options = {}) {
         const messageData = { text, sender, timestamp: Date.now(), options };
         chatHistory.push(messageData);
@@ -152,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMessage(messageData);
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
     }
+
 
     function simulateBotResponse(userMessage) {
         toggleTypingIndicator(true);
@@ -165,7 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (lowerUserMessage.includes('produit')) {
                 botReply = 'Voici notre produit phare, le "Chatbot Pro".';
+
                 options.card = { imageUrl: 'https://via.placeholder.com/300x150/5A3E8A/white?text=Produit', title: 'Chatbot Pro', subtitle: 'La solution d\'IA pour votre entreprise.', buttons: [{ title: 'Voir les détails', url: '#' }] };
+
                 options.quickReplies = ['Quel est le prix ?', 'Support technique'];
             } else {
                 botReply = `J'ai bien reçu votre message : "${userMessage}".`;
@@ -178,12 +191,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1500);
     }
 
+
     function handleQuickReplyClick(text) {
         const qrContainers = document.querySelectorAll('.quick-replies-container');
         qrContainers.forEach(container => container.remove());
         addMessage(text, 'user');
         simulateBotResponse(text);
     }
+
 
     function toggleTypingIndicator(show) {
         let existingIndicator = document.getElementById('typing-indicator');
@@ -198,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+
     function toggleChatbox() {
         chatboxContainer.classList.toggle('open');
     }
@@ -206,9 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
     //  PERSISTANCE & CONFIGURATION
     // =================================================================================
 
+
     function saveHistory() {
         localStorage.setItem('chatbox-history', JSON.stringify(chatHistory));
     }
+
 
     function loadHistory() {
         const savedHistory = localStorage.getItem('chatbox-history');
@@ -219,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return false;
     }
+
 
     function applyConfig(config) {
         const root = document.documentElement;
@@ -238,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         document.querySelector('.chatbox-header-title').textContent = config.header.title;
+
 
         // Applique le chemin de base à l'avatar
         let avatarSrc = config.header.botAvatar;
@@ -272,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
         delete urlConfig.theme;
         delete urlConfig.header;
         finalConfig = { ...finalConfig, ...urlConfig };
+
 
         return finalConfig;
     }

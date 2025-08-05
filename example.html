@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemple d'Intégration de la Chatbox</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background-color: #f0f2f5;
+            padding: 2rem;
+        }
+        h1 {
+            color: #333;
+        }
+        p {
+            max-width: 600px;
+            line-height: 1.6;
+        }
+        code {
+            background-color: #e2e2e2;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Page d'Exemple pour la Chatbox</h1>
+    <p>
+        Ceci est une page web standard. La chatbox est chargée et configurée ci-dessous.
+        Vous devriez voir un bouton de lancement en bas à droite de l'écran.
+    </p>
+    <p>
+        La configuration est appliquée via un objet <code>window.chatboxConfig</code>,
+        ce qui permet de personnaliser l'apparence et le comportement de la chatbox sans modifier ses fichiers sources.
+    </p>
+
+    <!--
+      CONFIGURATION DE LA CHATBOX
+      Cet objet est lu par le script de la chatbox pour appliquer une configuration personnalisée.
+    -->
+    <script>
+        window.chatboxConfig = {
+            position: 'bottom-right',
+            theme: {
+                primary: '#5A3E8A', // Une couleur violette
+                userMessageBg: '#5A3E8A',
+            },
+            header: {
+                title: 'Mon Assistant Personnalisé',
+                botAvatar: 'https://raw.githubusercontent.com/all-contributors/all-contributors/main/assets/logo-sm.png' // Un avatar d'exemple
+            },
+            welcomeMessage: 'Bienvenue sur cette page de démo ! Posez-moi une question.',
+            initialQuickReplies: ['Montre-moi un produit', 'Quelle est ta couleur ?', 'Aide']
+        };
+    </script>
+
+
+    <!--
+      INTÉGRATION DE LA CHATBOX
+      Ici, nous utilisons une iframe pour charger la chatbox. C'est la méthode la plus robuste
+      car elle isole le style et le script de la chatbox de la page parente.
+    -->
+    <iframe src="./index.html"
+            style="border:none; position:fixed; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index: 999;"
+            title="Chatbox"
+            id="chatbox-iframe">
+    </iframe>
+
+    <!-- Ce script permet à l'iframe de capturer les clics même si elle est en pointer-events:none par défaut -->
+    <script>
+        // Transfère les événements de la page parente à l'iframe pour le bouton de lancement
+        window.addEventListener('click', (e) => {
+            document.getElementById('chatbox-iframe').style.pointerEvents = 'auto';
+        });
+    </script>
+
+
+</body>
+</html>
