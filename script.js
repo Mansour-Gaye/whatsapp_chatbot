@@ -11,10 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultConfig = {
         position: 'bottom-right', // ou 'bottom-left'
         mode: 'floating',         // ou 'fullscreen'
+
+        assetBasePath: '',        // ex: '/static/img/chatbot/'
         theme: {
             primary: '#007bff',
             userMessageBg: '#007bff',
-            // D'autres variables de thème pourraient être ajoutées ici.
+
         },
         header: {
             title: 'Assistant IA',
@@ -34,14 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
 
-    let chatHistory = []; // Contient l'historique sous forme d'objets
-    let config = {};      // Contiendra la configuration finale
+
+    let chatHistory = [];
+    let config = {};
+
 
     // =================================================================================
     //  FONCTIONS DE RENDU (Construction de l'interface)
     // =================================================================================
 
-    /** Crée et affiche les boutons de réponses rapides. */
+
     function renderQuickReplies(replies) {
         const container = document.createElement('div');
         container.classList.add('quick-replies-container');
@@ -55,14 +59,21 @@ document.addEventListener('DOMContentLoaded', () => {
         chatboxMessages.appendChild(container);
     }
 
-    /** Crée un élément de carte HTML à partir de données. */
+
     function createCard(cardData) {
         const cardContainer = document.createElement('div');
         cardContainer.classList.add('card-container');
 
         if (cardData.imageUrl) {
             const img = document.createElement('img');
-            img.src = cardData.imageUrl;
+
+            // Préfixe l'URL de l'image avec la base si elle est relative
+            if (cardData.imageUrl.startsWith('/')) {
+                 img.src = `${config.assetBasePath}${cardData.imageUrl}`;
+            } else {
+                 img.src = cardData.imageUrl;
+            }
+
             img.alt = cardData.title || 'Card Image';
             cardContainer.appendChild(img);
         }
@@ -94,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return cardContainer;
     }
 
-    /** Affiche un message dans le DOM. Ne modifie pas l'historique. */
+
     function renderMessage(messageData) {
         const { text, sender, timestamp, options = {}, isHistory } = messageData;
 
@@ -143,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //  FONCTIONS DE LOGIQUE (Gestion des actions)
     // =================================================================================
 
-    /** Ajoute un nouveau message: historique, sauvegarde, affichage. */
+
     function addMessage(text, sender, options = {}) {
         const messageData = { text, sender, timestamp: Date.now(), options };
         chatHistory.push(messageData);
@@ -152,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
     }
 
-    /** Simule une réponse du bot. */
+
     function simulateBotResponse(userMessage) {
         toggleTypingIndicator(true);
         chatboxInput.disabled = true;
@@ -165,7 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (lowerUserMessage.includes('produit')) {
                 botReply = 'Voici notre produit phare, le "Chatbot Pro".';
-                options.card = { imageUrl: 'https://via.placeholder.com/300x150', title: 'Chatbot Pro', subtitle: 'La solution d\'IA pour votre entreprise.', buttons: [{ title: 'Voir les détails', url: '#' }] };
+
+                options.card = { imageUrl: 'https://via.placeholder.com/300x150/5A3E8A/white?text=Produit', title: 'Chatbot Pro', subtitle: 'La solution d\'IA pour votre entreprise.', buttons: [{ title: 'Voir les détails', url: '#' }] };
+
                 options.quickReplies = ['Quel est le prix ?', 'Support technique'];
             } else {
                 botReply = `J'ai bien reçu votre message : "${userMessage}".`;
@@ -178,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1500);
     }
 
-    /** Gère le clic sur une réponse rapide. */
+
     function handleQuickReplyClick(text) {
         const qrContainers = document.querySelectorAll('.quick-replies-container');
         qrContainers.forEach(container => container.remove());
@@ -186,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         simulateBotResponse(text);
     }
 
-    /** Affiche ou masque l'indicateur de frappe. */
+
     function toggleTypingIndicator(show) {
         let existingIndicator = document.getElementById('typing-indicator');
         if (existingIndicator) existingIndicator.remove();
@@ -200,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /** Ouvre ou ferme la chatbox. */
+
     function toggleChatbox() {
         chatboxContainer.classList.toggle('open');
     }
@@ -209,12 +222,12 @@ document.addEventListener('DOMContentLoaded', () => {
     //  PERSISTANCE & CONFIGURATION
     // =================================================================================
 
-    /** Sauvegarde l'historique dans le localStorage. */
+
     function saveHistory() {
         localStorage.setItem('chatbox-history', JSON.stringify(chatHistory));
     }
 
-    /** Charge l'historique depuis le localStorage. */
+
     function loadHistory() {
         const savedHistory = localStorage.getItem('chatbox-history');
         if (savedHistory) {
@@ -225,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
-    /** Applique la configuration à l'interface. */
+
     function applyConfig(config) {
         const root = document.documentElement;
         root.style.setProperty('--primary-accent-color', config.theme.primary);
@@ -244,30 +257,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         document.querySelector('.chatbox-header-title').textContent = config.header.title;
-        document.getElementById('bot-avatar').src = config.header.botAvatar;
+
+
+        // Applique le chemin de base à l'avatar
+        let avatarSrc = config.header.botAvatar;
+        if (avatarSrc && !avatarSrc.startsWith('http')) {
+            avatarSrc = `${config.assetBasePath}${avatarSrc}`;
+        }
+        document.getElementById('bot-avatar').src = avatarSrc;
     }
 
-    /** Charge la configuration depuis l'objet global et les paramètres URL. */
     function loadConfig() {
         let finalConfig = JSON.parse(JSON.stringify(defaultConfig));
-        if (window.chatboxConfig) {
-            for (const key in window.chatboxConfig) {
-                if (typeof window.chatboxConfig[key] === 'object' && !Array.isArray(window.chatboxConfig[key])) {
-                    finalConfig[key] = { ...finalConfig[key], ...window.chatboxConfig[key] };
-                } else {
-                    finalConfig[key] = window.chatboxConfig[key];
-                }
-            }
-        }
 
+        // Priorité 1: Paramètres URL
         const urlParams = new URLSearchParams(window.location.search);
+        const urlConfig = {
+            theme: {},
+            header: {}
+        };
         if (urlParams.get('primaryColor')) {
             const color = '#' + urlParams.get('primaryColor');
-            finalConfig.theme.primary = color;
-            finalConfig.theme.userMessageBg = color;
+            urlConfig.theme.primary = color;
+            urlConfig.theme.userMessageBg = color;
         }
-        if (urlParams.get('position')) finalConfig.position = urlParams.get('position');
-        if (urlParams.get('title')) finalConfig.header.title = urlParams.get('title');
+        if (urlParams.get('position')) urlConfig.position = urlParams.get('position');
+        if (urlParams.get('title')) urlConfig.header.title = urlParams.get('title');
+        if (urlParams.get('avatar')) urlConfig.header.botAvatar = urlParams.get('avatar');
+        if (urlParams.get('basePath')) urlConfig.assetBasePath = urlParams.get('basePath');
+
+        // Fusionne la config URL avec la config par défaut
+        finalConfig.theme = { ...finalConfig.theme, ...urlConfig.theme };
+        finalConfig.header = { ...finalConfig.header, ...urlConfig.header };
+        delete urlConfig.theme;
+        delete urlConfig.header;
+        finalConfig = { ...finalConfig, ...urlConfig };
+
 
         return finalConfig;
     }

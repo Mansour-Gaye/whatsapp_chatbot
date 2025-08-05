@@ -3,39 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatbox Assistant IA</title>
-    <link rel="stylesheet" href="style.css">
+
+    <title>Page Hôte de la Chatbox</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        main {
+            max-width: 70ch;
+            margin: auto;
+        }
+        h1 {
+            color: #1c1c1e;
+        }
+        p {
+            color: #3a3a3c;
+        }
+        code {
+            background-color: #e2e2e2;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+        }
+        .iframe-container {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            max-width: 450px; /* Largeur max pour la vue desktop */
+            max-height: 700px; /* Hauteur max pour la vue desktop */
+            z-index: 1000;
+            pointer-events: none; /* Laisse passer les clics vers la page en dessous */
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            pointer-events: auto; /* Capture les clics à l'intérieur de l'iframe */
+        }
+    </style>
 </head>
 <body>
-    <div id="chatbox-container" class="chatbox-container">
-        <div class="chatbox-header">
-            <div class="chatbox-header-avatar">
-                <img src="https://via.placeholder.com/40" alt="Bot Avatar" id="bot-avatar">
-            </div>
-            <div class="chatbox-header-title">
-                Assistant IA
-            </div>
-            <div class="chatbox-header-options">
-                <button id="close-chatbox">_</button>
-            </div>
-        </div>
-        <div id="chatbox-messages" class="chatbox-messages">
-            <!-- Les messages apparaîtront ici -->
-        </div>
-        <div class="chatbox-input-area">
-            <form id="chatbox-form" class="chatbox-form">
-                <input type="text" id="chatbox-input" placeholder="Tapez votre message..." autocomplete="off">
-                <button type="submit" id="chatbox-send">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                </button>
-            </form>
-        </div>
+
+    <main>
+        <h1>Page d'Exemple pour l'Intégration de la Chatbox</h1>
+        <p>
+            Ceci est une page web standard qui sert de conteneur pour notre composant de chatbox.
+            La chatbox elle-même est chargée dans une <code>iframe</code> en bas à droite de l'écran.
+        </p>
+        <p>
+            La configuration (couleur, titre, etc.) est passée directement à l'iframe via des <strong>paramètres d'URL</strong>.
+            C'est une méthode d'intégration robuste qui garantit que la chatbox est bien isolée du reste de la page.
+        </p>
+        <p>
+            Essayez de modifier les paramètres dans le <code>src</code> de l'<code>iframe</code> ci-dessous, par exemple :
+            <code>?primaryColor=ff5733&position=bottom-left</code>
+        </p>
+    </main>
+
+    <!--
+      INTÉGRATION DE LA CHATBOX VIA IFRAME
+      - Le 'src' pointe vers le fichier HTML de la chatbox.
+      - Les paramètres d'URL sont utilisés pour la configuration.
+    -->
+    <div class="iframe-container">
+        <iframe src="./chatbot.html?primaryColor=5A3E8A&title=Mon Assistant"
+                title="Chatbox Assistant">
+        </iframe>
     </div>
 
-    <div id="chat-launcher">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-    </div>
-
-    <script src="script.js"></script>
 </body>
 </html>
