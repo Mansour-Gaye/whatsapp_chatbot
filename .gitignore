@@ -70,3 +70,5 @@ dist/
 
 # Fichiers de logs
 *.log
+
+service_account.json
