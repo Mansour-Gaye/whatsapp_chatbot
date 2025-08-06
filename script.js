@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------
     //  VARIABLES GLOBALES & ELEMENTS DU DOM
     // ---------------------------
+    const API_ENDPOINT = '/api/chat';
+    const LEAD_ENDPOINT = '/api/lead';
+
     const chatboxContainer = document.getElementById('chatbox-container');
     const chatboxMessages = document.getElementById('chatbox-messages');
     const chatboxForm = document.getElementById('chatbox-form');
@@ -36,9 +39,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
 
-
-    let chatHistory = [];
     let config = {};
+    let chatHistory = []; // Pour affichage et persistance localStorage
+
+    // État du chat pour la logique métier
+    let step = 0; // 0: chat libre, 1: collecte infos, 2: chat normal après collecte
+    let exchangeCount = 0;
+    let lead = { name: "", email: "", phone: "" };
+    let missingFields = [];
 
 
     // =================================================================================
@@ -156,47 +164,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function addMessage(text, sender, options = {}) {
-        const messageData = { text, sender, timestamp: Date.now(), options };
+        // Le rôle pour l'API est 'assistant', mais pour l'UI c'est 'bot'
+        const role = (sender === 'bot') ? 'assistant' : 'user';
+        const messageData = { text, sender, role, timestamp: Date.now(), options };
+
         chatHistory.push(messageData);
         saveHistory();
         renderMessage(messageData);
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
     }
 
+    function isDefaultValue(value) {
+        return value === "1234567890" || (value && value.endsWith("@example.com"));
+    }
 
-    function simulateBotResponse(userMessage) {
+    function checkMissingFields() {
+        missingFields = [];
+        if (!lead.name || lead.name.trim() === "") missingFields.push('nom');
+        if (!lead.email || isDefaultValue(lead.email)) missingFields.push('email');
+        if (!lead.phone || isDefaultValue(lead.phone)) missingFields.push('téléphone');
+        return missingFields.length > 0;
+    }
+
+    function getMissingFieldsMessage() {
+        if (missingFields.length === 1) {
+            return `Pourriez-vous me donner votre ${missingFields[0]} ?`;
+        } else if (missingFields.length === 2) {
+            return `Pourriez-vous me donner votre ${missingFields[0]} et votre ${missingFields[1]} ?`;
+        } else {
+            return `Pourriez-vous me donner votre ${missingFields[0]}, votre ${missingFields[1]} et votre ${missingFields[2]} ?`;
+        }
+    }
+
+    async function handleUserMessage(userMessage) {
         toggleTypingIndicator(true);
         chatboxInput.disabled = true;
 
-        setTimeout(() => {
-            toggleTypingIndicator(false);
-            let botReply = '';
-            let options = {};
-            const lowerUserMessage = userMessage.toLowerCase();
+        // Prépare l'historique pour l'API
+        const historyForApi = chatHistory.map(msg => ({
+            role: msg.role,
+            content: msg.text
+        }));
 
-            if (lowerUserMessage.includes('produit')) {
-                botReply = 'Voici notre produit phare, le "Chatbot Pro".';
+        try {
+            let response;
+            let data;
 
-                options.card = { imageUrl: 'https://via.placeholder.com/300x150/5A3E8A/white?text=Produit', title: 'Chatbot Pro', subtitle: 'La solution d\'IA pour votre entreprise.', buttons: [{ title: 'Voir les détails', url: '#' }] };
+            if (step === 0) {
+                exchangeCount++;
+                response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: historyForApi }),
+                });
+                if (!response.ok) throw new Error('Erreur réseau API_ENDPOINT');
+                data = await response.json();
 
-                options.quickReplies = ['Quel est le prix ?', 'Support technique'];
-            } else {
-                botReply = `J'ai bien reçu votre message : "${userMessage}".`;
-                options.quickReplies = ['Info produit', 'Info services'];
+                addMessage(data.response, 'bot');
+
+                if (exchangeCount >= 2) {
+                    step = 1;
+                    setTimeout(() => {
+                        addMessage('Au fait, pour mieux vous aider, puis-je connaître votre nom, email et téléphone ?', 'bot');
+                    }, 1000);
+                }
+            } else if (step === 1) {
+                response = await fetch(LEAD_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ input: userMessage, lead: lead }),
+                });
+                if (!response.ok) throw new Error('Erreur réseau LEAD_ENDPOINT');
+                data = await response.json();
+
+                if (data.lead) {
+                    if (data.lead.name && !isDefaultValue(data.lead.name)) lead.name = data.lead.name;
+                    if (data.lead.email && !isDefaultValue(data.lead.email)) lead.email = data.lead.email;
+                    if (data.lead.phone && !isDefaultValue(data.lead.phone)) lead.phone = data.lead.phone;
+                }
+
+                if (checkMissingFields()) {
+                    addMessage(getMissingFieldsMessage(), 'bot');
+                } else {
+                    await fetch(LEAD_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ input: userMessage, lead: lead, save: true }),
+                    });
+                    addMessage('Merci, vos informations ont bien été enregistrées !', 'bot');
+                    step = 2; // Passe au chat normal
+                }
+            } else { // step === 2
+                response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: historyForApi }),
+                });
+                if (!response.ok) throw new Error('Erreur réseau API_ENDPOINT (step 2)');
+                data = await response.json();
+                addMessage(data.response, 'bot');
             }
-
-            addMessage(botReply, 'bot', options);
+        } catch (error) {
+            console.error('Erreur:', error);
+            addMessage('Désolé, une erreur est survenue. Veuillez réessayer.', 'bot');
+        } finally {
+            toggleTypingIndicator(false);
             chatboxInput.disabled = false;
             chatboxInput.focus();
-        }, 1500);
+        }
     }
-
 
     function handleQuickReplyClick(text) {
         const qrContainers = document.querySelectorAll('.quick-replies-container');
         qrContainers.forEach(container => container.remove());
         addMessage(text, 'user');
-        simulateBotResponse(text);
+        handleUserMessage(text);
     }
 
 
@@ -267,32 +349,54 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('bot-avatar').src = avatarSrc;
     }
 
+    function deepMerge(target, source) {
+        const output = { ...target };
+        if (isObject(target) && isObject(source)) {
+            Object.keys(source).forEach(key => {
+                if (isObject(source[key])) {
+                    if (!(key in target)) {
+                        Object.assign(output, { [key]: source[key] });
+                    } else {
+                        output[key] = deepMerge(target[key], source[key]);
+                    }
+                } else {
+                    Object.assign(output, { [key]: source[key] });
+                }
+            });
+        }
+        return output;
+    }
+    const isObject = (item) => (item && typeof item === 'object' && !Array.isArray(item));
+
     function loadConfig() {
+        // Priorité 3: defaultConfig
         let finalConfig = JSON.parse(JSON.stringify(defaultConfig));
+
+        // Priorité 2: window.chatboxConfig
+        if (window.chatboxConfig) {
+            finalConfig = deepMerge(finalConfig, window.chatboxConfig);
+        }
 
         // Priorité 1: Paramètres URL
         const urlParams = new URLSearchParams(window.location.search);
-        const urlConfig = {
-            theme: {},
-            header: {}
-        };
+        const urlConfig = { theme: {}, header: {} };
+
         if (urlParams.get('primaryColor')) {
             const color = '#' + urlParams.get('primaryColor');
             urlConfig.theme.primary = color;
             urlConfig.theme.userMessageBg = color;
         }
-        if (urlParams.get('position')) urlConfig.position = urlParams.get('position');
         if (urlParams.get('title')) urlConfig.header.title = urlParams.get('title');
         if (urlParams.get('avatar')) urlConfig.header.botAvatar = urlParams.get('avatar');
-        if (urlParams.get('basePath')) urlConfig.assetBasePath = urlParams.get('basePath');
 
-        // Fusionne la config URL avec la config par défaut
-        finalConfig.theme = { ...finalConfig.theme, ...urlConfig.theme };
-        finalConfig.header = { ...finalConfig.header, ...urlConfig.header };
-        delete urlConfig.theme;
-        delete urlConfig.header;
-        finalConfig = { ...finalConfig, ...urlConfig };
+        // Les clés de premier niveau
+        const topLevelKeys = ['position', 'mode', 'assetBasePath', 'welcomeMessage'];
+        topLevelKeys.forEach(key => {
+            if (urlParams.has(key)) urlConfig[key] = urlParams.get(key);
+        });
 
+        // Fusion finale
+        finalConfig = deepMerge(finalConfig, urlConfig);
 
         return finalConfig;
     }
@@ -324,7 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 qrContainers.forEach(container => container.remove());
                 addMessage(messageText, 'user');
                 chatboxInput.value = '';
-                simulateBotResponse(messageText);
+                handleUserMessage(messageText);
             }
         });
     }

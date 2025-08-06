@@ -157,11 +157,26 @@ def health():
     """Route pour vérifier que le service est en ligne."""
     return jsonify({"status": "healthy"}), 200
 
-from flask import send_from_directory
+# --- Routes pour servir la nouvelle chatbox et ses assets ---
 
 @app.route("/chatbot")
 def chatbot_page():
-    return send_from_directory("static", "index.html")
+    # Sert le fichier chatbot.html depuis le dossier parent (racine du projet)
+    return send_from_directory("..", "chatbot.html")
+
+@app.route("/script.js")
+def serve_script():
+    return send_from_directory("..", "script.js")
+
+@app.route("/style.css")
+def serve_style():
+    return send_from_directory("..", "style.css")
+
+@app.route('/img/<path:filename>')
+def serve_image(filename):
+    # Sert les images depuis le dossier static/img
+    return send_from_directory('static/img', filename)
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

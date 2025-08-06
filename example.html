@@ -61,20 +61,13 @@
       INTÉGRATION DE LA CHATBOX
       Ici, nous utilisons une iframe pour charger la chatbox. C'est la méthode la plus robuste
       car elle isole le style et le script de la chatbox de la page parente.
+      Assurez-vous que le serveur Flask est lancé et accessible à l'adresse indiquée dans `src`.
     -->
-    <iframe src="./index.html"
-            style="border:none; position:fixed; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index: 999;"
+    <iframe src="http://127.0.0.1:5000/chatbot"
+            style="border:none; position:fixed; width:100%; height:100%; top:0; left:0; z-index: 999;"
             title="Chatbox"
             id="chatbox-iframe">
     </iframe>
-
-    <!-- Ce script permet à l'iframe de capturer les clics même si elle est en pointer-events:none par défaut -->
-    <script>
-        // Transfère les événements de la page parente à l'iframe pour le bouton de lancement
-        window.addEventListener('click', (e) => {
-            document.getElementById('chatbox-iframe').style.pointerEvents = 'auto';
-        });
-    </script>
 
 
 </body>
