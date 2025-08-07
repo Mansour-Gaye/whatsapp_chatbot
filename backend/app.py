@@ -122,8 +122,8 @@ def chat():
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
-        # Keeping your custom error message here as you might have a reason for it
-        return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
+        # Return a meaningful error message for easier debugging
+        return jsonify({"status": "error", "response": f"Une erreur interne est survenue: {str(e)}"}), 500
 
 # --- /api/lead and health routes remain the same ---
 @app.route("/api/lead", methods=["POST"])
@@ -150,7 +150,7 @@ def lead():
 
     except Exception as e:
         print(f"[API_LEAD] Erreur dans /api/lead: {str(e)}")
-        return jsonify({"status": "error", "message": f"Erreur lors du traitement des informations de lead: {e}"}), 500
+        return jsonify({"status": "error", "message": f"Une erreur interne est survenue: {str(e)}"}), 500
 
 @app.route("/health")
 def health():
