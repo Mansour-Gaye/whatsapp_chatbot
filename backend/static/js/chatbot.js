@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         header: {
             title: 'Assistant IA',
-            botAvatar: '/static/img/cultural-nuance.png'
+            botAvatar: '/static/img/avatar.png'
         },
         welcomeMessage: 'Bonjour ! Comment puis-je vous aider aujourd\'hui ?',
         initialQuickReplies: ['Info produit', 'Support technique', 'Autre question']
