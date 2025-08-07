@@ -145,7 +145,11 @@ window.leadData = { name: "", email: "", phone: "" };
         if (text) {
             const messageContent = document.createElement('div');
             messageContent.classList.add('message-content');
-            messageContent.textContent = text;
+            if (sender === 'bot') {
+                messageContent.innerHTML = DOMPurify.sanitize(marked.parse(text));
+            } else {
+                messageContent.textContent = text;
+            }
             messageBubble.appendChild(messageContent);
         }
 
