@@ -1,271 +1,381 @@
-// Configuration
-const API_ENDPOINT = '/api/chat';
-const LEAD_ENDPOINT = '/api/lead';
-const TYPING_DELAY = 1000;
+/**
+ * Chatbox AI Assistant
+ *
+ * Ce script gère l'ensemble de la logique pour une chatbox web moderne,
+ * personnalisable et persistante.
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    // ---------------------------
+    //  CONFIGURATION PAR DEFAUT
+    // ---------------------------
+    const defaultConfig = {
+        position: 'bottom-right', // ou 'bottom-left'
+        mode: 'floating',         // ou 'fullscreen'
 
-// Éléments DOM
-const chatbox = document.getElementById('chatbox');
-const userInput = document.getElementById('userInput');
-const sendBtn = document.getElementById('sendBtn');
-const startBtn = document.getElementById('startBtn');
+        assetBasePath: '',        // ex: '/static/img/chatbot/'
+        theme: {
+            primary: '#007bff',
+            userMessageBg: '#007bff',
 
-// État du chat
-let isTyping = false;
-let step = 0; // 0: chat libre, 1: collecte infos, 2: chat normal après collecte
-let exchangeCount = 0;
-let history = [];
-let lead = { name: "", email: "", phone: "" };
-let missingFields = [];
+        },
+        header: {
+            title: 'Assistant IA',
+            botAvatar: '/static/img/cultural-nuance.png'
+        },
+        welcomeMessage: 'Bonjour ! Comment puis-je vous aider aujourd\'hui ?',
+        initialQuickReplies: ['Info produit', 'Support technique', 'Autre question']
+        };
+    
+    // L'appel à init() sera déplacé à la fin du fichier
 
-// Utilitaires
-function isDefaultValue(value) {
-  return value === "1234567890" || value.endsWith("@example.com");
-}
+    // ---------------------------
+    const chatboxContainer = document.getElementById('chatbox-container');
+    const chatboxMessages = document.getElementById('chatbox-messages');
+    const chatboxForm = document.getElementById('chatbox-form');
+    const chatboxInput = document.getElementById('chatbox-input');
+    const closeChatboxBtn = document.getElementById('close-chatbox');
+    const chatLauncher = document.getElementById('chat-launcher');
 
-function getCurrentTime() {
-  return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-}
 
-function createMessageElement(content, isUser = false) {
-  const messageDiv = document.createElement('div');
-  messageDiv.className = isUser ? 'chat-message user' : 'chat-message bot';
+    let chatHistory = [];
+    let config = {};
 
-  // Convertir les sauts de ligne en <br> et préserver le HTML
-  const formattedContent = content
-    .replace(/\n/g, '<br>')
-    .replace(/\•/g, '•')
-    .replace(/\→/g, '→');
+    let leadStep = 0; // 0: chat libre, 1: collecte, 2: chat normal après collecte
+    let leadExchangeCount = 0;
+window.leadData = { name: "", email: "", phone: "" };
+    let leadMissingFields = [];
 
-  messageDiv.innerHTML = formattedContent;
-  return messageDiv;
-}
 
-function showTypingIndicator() {
-  const indicator = document.createElement('div');
-  indicator.className = 'typing-indicator';
-  indicator.innerHTML = `
-    <div class="typing-dot"></div>
-    <div class="typing-dot"></div>
-    <div class="typing-dot"></div>
-  `;
-  chatbox.appendChild(indicator);
-  chatbox.scrollTop = chatbox.scrollHeight;
-  return indicator;
-}
+    // =================================================================================
+    //  FONCTIONS DE RENDU (Construction de l'interface)
+    // =================================================================================
 
-function removeTypingIndicator(indicator) {
-  if (indicator && indicator.parentNode) {
-    indicator.parentNode.removeChild(indicator);
-  }
-}
 
-function checkMissingFields() {
-  missingFields = [];
-  if (!lead.name || lead.name.trim() === "") missingFields.push('nom');
-  if (!lead.email || isDefaultValue(lead.email)) missingFields.push('email');
-  if (!lead.phone || isDefaultValue(lead.phone)) missingFields.push('téléphone');
-  return missingFields.length > 0;
-}
-
-function getMissingFieldsMessage() {
-  if (missingFields.length === 1) {
-    return `Pourriez-vous me donner votre ${missingFields[0]} ?`;
-  } else if (missingFields.length === 2) {
-    return `Pourriez-vous me donner votre ${missingFields[0]} et votre ${missingFields[1]} ?`;
-  } else {
-    return `Pourriez-vous me donner votre ${missingFields[0]}, votre ${missingFields[1]} et votre ${missingFields[2]} ?`;
-  }
-}
-
-// Gestion des messages
-async function sendMessage() {
-  const message = userInput.value.trim();
-  if (!message || isTyping) return;
-
-  // Ajouter le message de l'utilisateur
-  const userMessage = createMessageElement(message, true);
-  chatbox.appendChild(userMessage);
-  chatbox.scrollTop = chatbox.scrollHeight;
-
-  // Vider l'input
-  userInput.value = '';
-  userInput.style.height = 'auto';
-
-  // Désactiver l'input pendant le traitement
-  isTyping = true;
-  sendBtn.disabled = true;
-  userInput.disabled = true;
-
-  // Afficher l'indicateur de saisie
-  const typingIndicator = showTypingIndicator();
-
-  try {
-    let response;
-    let data;
-
-    if (step === 0) {
-      // Chat libre
-      exchangeCount++;
-      response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          history: [...history, { role: 'user', content: message }]
-        }),
-      });
-
-      if (!response.ok) throw new Error('Erreur réseau');
-
-      data = await response.json();
-      history.push({ role: 'user', content: message });
-      history.push({ role: 'assistant', content: data.response });
-
-      // Simuler un délai de réponse
-      await new Promise(resolve => setTimeout(resolve, TYPING_DELAY));
-
-      // Supprimer l'indicateur de saisie
-      removeTypingIndicator(typingIndicator);
-
-      // Ajouter la réponse du bot
-      if (data && data.response) {
-        const botMessage = createMessageElement(data.response);
-        chatbox.appendChild(botMessage);
-        chatbox.scrollTop = chatbox.scrollHeight;
-      }
-
-      // Après 2 échanges, demander les infos
-      if (exchangeCount >= 2) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const leadRequest = createMessageElement(
-          'Au fait, pour mieux vous aider, puis-je connaître votre nom, email et téléphone ?'
-        );
-        chatbox.appendChild(leadRequest);
-        chatbox.scrollTop = chatbox.scrollHeight;
-        step = 1;
-      }
-    } else if (step === 1) {
-      // Collecte des infos
-      response = await fetch(LEAD_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: message,
-          lead: lead
-        }),
-      });
-
-      if (!response.ok) throw new Error('Erreur réseau');
-
-      data = await response.json();
-
-      // Mettre à jour les informations du lead
-      if (data.lead) {
-        if (data.lead.name && !isDefaultValue(data.lead.name)) lead.name = data.lead.name;
-        if (data.lead.email && !isDefaultValue(data.lead.email)) lead.email = data.lead.email;
-        if (data.lead.phone && !isDefaultValue(data.lead.phone)) lead.phone = data.lead.phone;
-      }
-
-      // Vérifier les champs manquants
-      if (checkMissingFields()) {
-        await new Promise(resolve => setTimeout(resolve, TYPING_DELAY));
-        removeTypingIndicator(typingIndicator);
-        const missingFieldsMessage = createMessageElement(getMissingFieldsMessage());
-        chatbox.appendChild(missingFieldsMessage);
-        chatbox.scrollTop = chatbox.scrollHeight;
-      } else {
-        // Toutes les informations sont présentes
-        response = await fetch(LEAD_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: message,
-            lead: lead,
-            save: true
-          }),
+    function renderQuickReplies(replies) {
+        const container = document.createElement('div');
+        container.classList.add('quick-replies-container');
+        replies.forEach(replyText => {
+            const button = document.createElement('button');
+            button.classList.add('quick-reply-btn');
+            button.textContent = replyText;
+            button.addEventListener('click', () => handleQuickReplyClick(replyText));
+            container.appendChild(button);
         });
-
-        if (!response.ok) throw new Error('Erreur réseau');
-
-        await new Promise(resolve => setTimeout(resolve, TYPING_DELAY));
-        removeTypingIndicator(typingIndicator);
-
-        const confirmation = createMessageElement(
-          'Merci, vos informations ont bien été enregistrées !'
-        );
-        chatbox.appendChild(confirmation);
-        chatbox.scrollTop = chatbox.scrollHeight;
-        step = 2;
-      }
-    } else {
-      // Chat normal après collecte
-      response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          history: [...history, { role: 'user', content: message }]
-        }),
-      });
-
-      if (!response.ok) throw new Error('Erreur réseau');
-
-      data = await response.json();
-      history.push({ role: 'user', content: message });
-      history.push({ role: 'assistant', content: data.response });
-
-      await new Promise(resolve => setTimeout(resolve, TYPING_DELAY));
-      removeTypingIndicator(typingIndicator);
-
-      if (data && data.response) {
-        const botMessage = createMessageElement(data.response);
-        chatbox.appendChild(botMessage);
-        chatbox.scrollTop = chatbox.scrollHeight;
-      }
+        chatboxMessages.appendChild(container);
     }
 
-  } catch (error) {
-    console.error('Erreur:', error);
-    removeTypingIndicator(typingIndicator);
 
-    const errorMessage = createMessageElement(
-      'Désolé, une erreur est survenue. Veuillez réessayer.'
-    );
-    chatbox.appendChild(errorMessage);
-  } finally {
-    isTyping = false;
-    sendBtn.disabled = false;
-    userInput.disabled = false;
-    userInput.focus();
-  }
+    function createCard(cardData) {
+        const cardContainer = document.createElement('div');
+        cardContainer.classList.add('card-container');
+
+        if (cardData.imageUrl) {
+            const img = document.createElement('img');
+
+            // Préfixe l'URL de l'image avec la base si elle est relative
+            if (cardData.imageUrl.startsWith('/')) {
+                 img.src = `${config.assetBasePath}${cardData.imageUrl}`;
+            } else {
+                 img.src = cardData.imageUrl;
+            }
+
+            img.alt = cardData.title || 'Card Image';
+            cardContainer.appendChild(img);
+        }
+        const cardBody = document.createElement('div');
+        cardBody.classList.add('card-body');
+        if (cardData.title) {
+            const title = document.createElement('div');
+            title.classList.add('card-title');
+            title.textContent = cardData.title;
+            cardBody.appendChild(title);
+        }
+        if (cardData.subtitle) {
+            const subtitle = document.createElement('div');
+            subtitle.classList.add('card-subtitle');
+            subtitle.textContent = cardData.subtitle;
+            cardBody.appendChild(subtitle);
+        }
+        if (cardData.buttons) {
+            cardData.buttons.forEach(btnData => {
+                const button = document.createElement('a');
+                button.classList.add('card-button');
+                button.textContent = btnData.title;
+                button.href = btnData.url || '#';
+                if (btnData.url) button.target = '_blank';
+                cardBody.appendChild(button);
+            });
+        }
+        cardContainer.appendChild(cardBody);
+        return cardContainer;
+    }
+
+
+    function renderMessage(messageData) {
+        const { text, sender, timestamp, options = {}, isHistory } = messageData;
+
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) typingIndicator.remove();
+
+        const messageBubble = document.createElement('div');
+        messageBubble.classList.add('message-bubble', sender);
+
+        if (text) {
+            const messageContent = document.createElement('div');
+            messageContent.classList.add('message-content');
+            messageContent.textContent = text;
+            messageBubble.appendChild(messageContent);
+        }
+
+        if (options.card) {
+            messageBubble.appendChild(createCard(options.card));
+        }
+
+        const messageFooter = document.createElement('div');
+        messageFooter.classList.add('message-footer');
+
+        const time = new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const timestampEl = document.createElement('div');
+        timestampEl.classList.add('message-timestamp');
+        timestampEl.textContent = time;
+        messageFooter.appendChild(timestampEl);
+
+        if (sender === 'user') {
+            const readReceipt = document.createElement('span');
+            readReceipt.classList.add('read-receipt', 'seen');
+            readReceipt.innerHTML = '✓✓';
+            messageFooter.appendChild(readReceipt);
+        }
+
+        messageBubble.appendChild(messageFooter);
+        chatboxMessages.appendChild(messageBubble);
+
+        if (!isHistory && options.quickReplies && options.quickReplies.length > 0) {
+            renderQuickReplies(options.quickReplies);
+        }
+    }
+
+    // =================================================================================
+    //  FONCTIONS DE LOGIQUE (Gestion des actions)
+    // =================================================================================
+
+
+    function addMessage(text, sender, options = {}) {
+        const messageData = { text, sender, timestamp: Date.now(), options };
+        chatHistory.push(messageData);
+        saveHistory();
+        renderMessage(messageData);
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+    }
+
+
+    async function sendToBackend(history) {
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history })
+            });
+            const data = await response.json();
+            if (data.status === "success") {
+                return data.response;
+            } else {
+                return "Je rencontre un souci technique. Merci de réessayer plus tard.";
+            }
+        } catch (e) {
+            return "Erreur de connexion au serveur.";
+        }
+    }
+
+    // SUPPRIME la première définition de handleUserMessage (gardera la version simplifiée plus bas)
+
+
+    function handleQuickReplyClick(text) {
+        const qrContainers = document.querySelectorAll('.quick-replies-container');
+        qrContainers.forEach(container => container.remove());
+        addMessage(text, 'user');
+        chatboxInput.value = '';
+        handleUserMessage(text); // Appel réel au backend
+    }
+
+
+    function toggleTypingIndicator(show) {
+        let existingIndicator = document.getElementById('typing-indicator');
+        if (existingIndicator) existingIndicator.remove();
+        if (show) {
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.classList.add('message-bubble', 'bot', 'typing-indicator');
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+            chatboxMessages.appendChild(indicator);
+            chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+        }
+    }
+
+
+function toggleChatbox(forceState) {
+    const isOpen = typeof forceState === 'boolean' 
+        ? forceState 
+        : !chatboxContainer.classList.contains('open');
+    chatboxContainer.classList.toggle('open', isOpen);
+    chatLauncher.classList.toggle('hidden', isOpen);
+    localStorage.setItem('chatbox-state', isOpen);
+    // Forcer le recalcul du layout
+    chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 }
 
-// Gestion des événements
-sendBtn.addEventListener('click', sendMessage);
+    // =================================================================================
+    //  PERSISTANCE & CONFIGURATION
+    // =================================================================================
 
-userInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-});
 
-startBtn.addEventListener('click', () => {
-  // Réinitialiser le chat
-  chatbox.innerHTML = '';
-  userInput.value = '';
-  userInput.style.height = 'auto';
-  step = 0;
-  exchangeCount = 0;
-  history = [];
-  lead = { name: "", email: "", phone: "" };
+    function saveHistory() {
+        try {
+            const limitedHistory = chatHistory.slice(-50);
+            localStorage.setItem('chatbox-history', JSON.stringify(limitedHistory));
+        } catch (e) {
+            console.error("Erreur de sauvegarde:", e);
+        }
+    }
 
-  // Ajouter un message de bienvenue
-  const welcomeMessage = createMessageElement(
-    'Bonjour ! Je suis l\'assistant virtuel de TRANSLAB INTERNATIONAL, spécialisé en Interprétation de conférence et Traduction. Comment puis-je vous aider aujourd\'hui ? 🌍'
-  );
-  chatbox.appendChild(welcomeMessage);
-});
 
-// Initialisation
-window.addEventListener('load', () => {
-  startBtn.click();
+    function loadHistory() {
+        const savedHistory = localStorage.getItem('chatbox-history');
+        if (savedHistory) {
+            chatHistory = JSON.parse(savedHistory);
+            chatHistory.forEach(messageData => renderMessage({ ...messageData, isHistory: true }));
+            return true;
+        }
+        return false;
+    }
+
+
+    async function handleUserMessage(userMessage) {
+        if (userMessage.toLowerCase().includes('reset')) {
+            localStorage.clear();
+            location.reload();
+            return;
+        }
+        toggleTypingIndicator(true);
+        chatboxInput.disabled = true;
+
+        if (leadStep === 1) {
+            try {
+                const response = await fetch('/api/lead', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        input: userMessage,
+                        current_lead: window.leadData
+                    })
+                });
+                const data = await response.json();
+                if (data.status === "success") {
+                    window.leadData = data.lead;
+                    addMessage(data.message || "Merci pour ces informations !", 'bot');
+                    leadStep = data.complete ? 2 : 1;
+                } else {
+                    throw new Error(data.message || "Erreur serveur");
+                }
+            } catch (e) {
+                addMessage(`Désolé, une erreur est survenue : ${e.message}`, 'bot');
+            } finally {
+                toggleTypingIndicator(false);
+                chatboxInput.disabled = false;
+                chatboxInput.focus();
+            }
+            return;
+        }
+
+        // Chat normal ou début
+        if (leadStep === 0) {
+            leadExchangeCount++;
+            const history = chatHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text
+            }));
+            history.push({ role: 'user', content: userMessage });
+            const botReply = await sendToBackend(history);
+            toggleTypingIndicator(false);
+            addMessage(botReply, 'bot');
+            chatboxInput.disabled = false;
+            chatboxInput.focus();
+
+            if (leadExchangeCount >= 2) {
+                setTimeout(() => {
+                    addMessage("Au fait, pour mieux vous aider, puis-je connaître votre nom, email et téléphone ?", 'bot');
+                    leadStep = 1;
+                }, 1000);
+            }
+        } else if (leadStep === 2) {
+            // Chat normal après collecte
+            const history = chatHistory.map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text
+            }));
+            history.push({ role: 'user', content: userMessage });
+            const botReply = await sendToBackend(history);
+            toggleTypingIndicator(false);
+            addMessage(botReply, 'bot');
+            chatboxInput.disabled = false;
+            chatboxInput.focus();
+        }
+    }
+
+    // Initialisation UI et listeners déplacée dans init()
+    function init() {
+        config = loadConfig();
+        applyConfig(config);
+
+        // Initialisation de l'état
+        const savedState = localStorage.getItem('chatbox-state');
+        const initialState = savedState ? savedState === 'true' : false;
+        // Fermer par défaut si pas d'état sauvegardé
+        if (!initialState) {
+            chatboxContainer.classList.remove('open');
+            chatLauncher.classList.remove('hidden');
+        } else {
+            chatboxContainer.classList.add('open');
+            chatLauncher.classList.add('hidden');
+        }
+
+        // Vérifier le chargement des messages
+        console.log('History loaded:', loadHistory());
+
+        // Gestion des événements
+        chatLauncher.addEventListener('click', () => {
+            chatboxContainer.classList.add('open');
+            chatLauncher.classList.add('hidden');
+            localStorage.setItem('chatbox-state', 'true');
+        });
+
+        closeChatboxBtn.addEventListener('click', () => {
+            chatboxContainer.classList.remove('open');
+            chatLauncher.classList.remove('hidden');
+            localStorage.setItem('chatbox-state', 'false');
+        });
+
+        const historyLoaded = loadHistory();
+        if (!historyLoaded) {
+            addMessage(config.welcomeMessage, 'bot', {
+                quickReplies: config.initialQuickReplies
+            });
+        }
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+
+        chatboxForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const messageText = chatboxInput.value.trim();
+            if (messageText) {
+                const qrContainers = document.querySelectorAll('.quick-replies-container');
+                qrContainers.forEach(container => container.remove());
+                addMessage(messageText, 'user');
+                chatboxInput.value = '';
+                handleUserMessage(messageText);
+            }
+        });
+    }
+
+    // Appel final
+    init();
 });
