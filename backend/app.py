@@ -8,14 +8,15 @@ from functools import wraps
 
 # --- Section d'importation des modules de traitement ---
 try:
-    from lead_graph import structured_llm, collect_lead_from_text, llm, Lead
+    # Importation sélective pour la clarté
+    from lead_graph import structured_llm, save_lead, llm, Lead
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, collect_lead_from_text, llm, Lead, HumanMessage, AIMessage = None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage = None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
@@ -122,35 +123,57 @@ def chat():
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
-        # Keeping your custom error message here as you might have a reason for it
-        return jsonify({"status": "error", "response": "TEST DE DEPLOIEMENT REUSSI - ERREUR PERSISTE."}), 500
+        # Return a meaningful error message for easier debugging
+        return jsonify({"status": "error", "response": f"Une erreur interne est survenue: {str(e)}"}), 500
 
-# --- /api/lead and health routes remain the same ---
 @app.route("/api/lead", methods=["POST"])
 @log_requests
 def lead():
     data = request.get_json()
     user_input = data.get("input", "")
-    save_flag = data.get("save", False)
+    current_lead_data = data.get("current_lead", {})
+
     try:
-        if not LEAD_GRAPH_FOR_APP_IMPORTED or structured_llm is None or collect_lead_from_text is None:
+        if not LEAD_GRAPH_FOR_APP_IMPORTED or structured_llm is None or save_lead is None:
             print("[API_LEAD] Lead processing components not available.")
             raise Exception("Lead components not configured for lead API")
 
-        lead_info = structured_llm.invoke(user_input)
+        # 1. Crée un objet Lead à partir des données actuelles
+        current_lead = Lead(**current_lead_data)
 
-        if not any([lead_info.name, lead_info.email, lead_info.phone]):
-            return jsonify({"status": "error", "message": "Informations manquantes. Merci de fournir nom, email ou téléphone."}), 400
+        # 2. Extrait les nouvelles informations du message de l'utilisateur
+        new_info = structured_llm.invoke(user_input)
 
-        if save_flag:
-            collect_lead_from_text(user_input)
-            print("[APP.PY] save_lead_to_drive call is temporarily disabled.")
+        # 3. Met à jour le lead avec les nouvelles informations non vides
+        updated_data = current_lead.model_dump()
+        new_data = new_info.model_dump()
+        for key, value in new_data.items():
+            if value: # Ne met à jour que si une nouvelle valeur a été trouvée
+                updated_data[key] = value
 
-        return jsonify({"status": "success", "lead": lead_info.model_dump()})
+        updated_lead = Lead(**updated_data)
+
+        # 4. Vérifie si le lead est complet
+        is_complete = all([updated_lead.name, updated_lead.email, updated_lead.phone])
+
+        response_message = "Merci pour ces informations !"
+        if is_complete:
+            # 5. Sauvegarde le lead complet dans Supabase
+            if save_lead(updated_lead):
+                response_message = "Merci ! Vos informations ont été enregistrées. Comment puis-je vous aider maintenant ?"
+            else:
+                response_message = "Merci ! Je n'ai pas pu enregistrer vos informations, mais nous pouvons continuer."
+
+        return jsonify({
+            "status": "success",
+            "lead": updated_lead.model_dump(),
+            "complete": is_complete,
+            "message": response_message
+        })
 
     except Exception as e:
         print(f"[API_LEAD] Erreur dans /api/lead: {str(e)}")
-        return jsonify({"status": "error", "message": f"Erreur lors du traitement des informations de lead: {e}"}), 500
+        return jsonify({"status": "error", "message": f"Une erreur interne est survenue: {str(e)}"}), 500
 
 @app.route("/health")
 def health():

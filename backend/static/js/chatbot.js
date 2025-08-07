@@ -176,19 +176,25 @@ window.leadData = { name: "", email: "", phone: "" };
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ history })
             });
+            if (!response.ok) {
+                // Try to get more details from the response body
+                const errorData = await response.json().catch(() => null); // Gracefully handle non-JSON responses
+                const errorMessage = errorData ? errorData.response : `HTTP error! status: ${response.status}`;
+                console.error("Backend error:", errorMessage);
+                return `Je rencontre un souci technique. ${errorMessage}`;
+            }
             const data = await response.json();
             if (data.status === "success") {
                 return data.response;
             } else {
-                return "Je rencontre un souci technique. Merci de réessayer plus tard.";
+                 // The backend now sends a meaningful error in 'response'
+                return data.response || "Une erreur inattendue est survenue.";
             }
         } catch (e) {
+            console.error("Network or fetch error:", e);
             return "Erreur de connexion au serveur.";
         }
     }
-
-    // SUPPRIME la première définition de handleUserMessage (gardera la version simplifiée plus bas)
-
 
     function handleQuickReplyClick(text) {
         const qrContainers = document.querySelectorAll('.quick-replies-container');
@@ -228,6 +234,92 @@ function toggleChatbox(forceState) {
     //  PERSISTANCE & CONFIGURATION
     // =================================================================================
 
+    function deepMerge(target, source) {
+        const output = { ...target };
+        if (isObject(target) && isObject(source)) {
+            Object.keys(source).forEach(key => {
+                if (isObject(source[key])) {
+                    if (!(key in target))
+                        Object.assign(output, { [key]: source[key] });
+                    else
+                        output[key] = deepMerge(target[key], source[key]);
+                } else {
+                    Object.assign(output, { [key]: source[key] });
+                }
+            });
+        }
+        return output;
+    }
+
+    function isObject(item) {
+        return (item && typeof item === 'object' && !Array.isArray(item));
+    }
+
+    function loadConfig() {
+        // 1. Start with default config
+        let mergedConfig = { ...defaultConfig };
+
+        // 2. Merge with window config object if it exists
+        if (window.chatboxConfig && isObject(window.chatboxConfig)) {
+            mergedConfig = deepMerge(mergedConfig, window.chatboxConfig);
+        }
+
+        // 3. Override with URL parameters for quick customization
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramsConfig = {
+            position: urlParams.get('position'),
+            theme: { primary: urlParams.get('primaryColor') ? `#${urlParams.get('primaryColor')}` : null },
+            header: {
+                title: urlParams.get('title'),
+                botAvatar: urlParams.get('avatar')
+            },
+            assetBasePath: urlParams.get('basePath')
+        };
+
+        // Clean up null/undefined values from paramsConfig before merging
+        Object.keys(paramsConfig).forEach(key => {
+            if (paramsConfig[key] === null || paramsConfig[key] === undefined) {
+                delete paramsConfig[key];
+            }
+            if (isObject(paramsConfig[key])) {
+                 Object.keys(paramsConfig[key]).forEach(subKey => {
+                    if (paramsConfig[key][subKey] === null || paramsConfig[key][subKey] === undefined) {
+                        delete paramsConfig[key][subKey];
+                    }
+                 });
+                 if (Object.keys(paramsConfig[key]).length === 0) {
+                     delete paramsConfig[key];
+                 }
+            }
+        });
+
+        mergedConfig = deepMerge(mergedConfig, paramsConfig);
+        return mergedConfig;
+    }
+
+    function applyConfig(config) {
+        // Apply theme colors
+        document.documentElement.style.setProperty('--chatbox-primary-color', config.theme.primary);
+        document.documentElement.style.setProperty('--chatbox-user-message-bg-color', config.theme.userMessageBg || config.theme.primary);
+
+        // Apply position
+        chatboxContainer.classList.add(config.position || 'bottom-right');
+        chatLauncher.classList.add(config.position || 'bottom-right');
+
+        // Apply header
+        const headerTitle = document.querySelector('.chatbox-header-title');
+        if (headerTitle) headerTitle.textContent = config.header.title;
+
+        const botAvatarImg = document.getElementById('bot-avatar');
+        if (botAvatarImg) {
+            let avatarUrl = config.header.botAvatar;
+            // Handle base path for avatar
+            if (config.assetBasePath && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('/')) {
+                avatarUrl = `${config.assetBasePath}${avatarUrl}`;
+            }
+            botAvatarImg.src = avatarUrl;
+        }
+    }
 
     function saveHistory() {
         try {
@@ -339,9 +431,6 @@ function toggleChatbox(forceState) {
             chatLauncher.classList.add('hidden');
         }
 
-        // Vérifier le chargement des messages
-        console.log('History loaded:', loadHistory());
-
         // Gestion des événements
         chatLauncher.addEventListener('click', () => {
             chatboxContainer.classList.add('open');
@@ -355,7 +444,9 @@ function toggleChatbox(forceState) {
             localStorage.setItem('chatbox-state', 'false');
         });
 
+        // Charger l'historique et afficher le message de bienvenue si nécessaire
         const historyLoaded = loadHistory();
+        console.log('History loaded:', historyLoaded);
         if (!historyLoaded) {
             addMessage(config.welcomeMessage, 'bot', {
                 quickReplies: config.initialQuickReplies
