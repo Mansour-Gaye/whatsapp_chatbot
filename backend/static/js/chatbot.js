@@ -35,10 +35,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatboxInput = document.getElementById('chatbox-input');
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
+    const progressBar = document.querySelector('.progress-bar');
 
 
     let chatHistory = [];
     let config = {};
+    let progressTimeout = null;
+    let inactivityTimer = null;
 
     let leadStep = 0; // 0: chat libre, 1: collecte, 2: chat normal après collecte
     let leadExchangeCount = 0;
@@ -112,13 +115,32 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
     function renderMessage(messageData) {
-        const { text, sender, timestamp, options = {}, isHistory } = messageData;
+        let { text, sender, timestamp, options = {}, isHistory } = messageData;
 
         const typingIndicator = document.getElementById('typing-indicator');
         if (typingIndicator) typingIndicator.remove();
 
         const messageBubble = document.createElement('div');
         messageBubble.classList.add('message-bubble', sender);
+
+        // --- Image Parsing Logic ---
+        const imageRegex = /\[image:\s*([^\]]+)\]/g;
+        const imageMatches = text.match(imageRegex);
+
+        if (imageMatches) {
+            imageMatches.forEach(tag => {
+                const imageName = tag.replace(imageRegex, '$1').trim();
+                const img = document.createElement('img');
+                img.src = `/static/public/${imageName}`;
+                img.alt = imageName;
+                img.style.maxWidth = '100%';
+                img.style.borderRadius = '12px';
+                img.style.marginTop = '8px';
+                messageBubble.appendChild(img);
+            });
+            text = text.replace(imageRegex, '').trim();
+        }
+        // --- End Image Parsing Logic ---
 
         if (text) {
             const messageContent = document.createElement('div');
@@ -166,6 +188,26 @@ window.leadData = { name: "", email: "", phone: "" };
         saveHistory();
         renderMessage(messageData);
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+
+        // --- Inactivity Timer ---
+        clearTimeout(inactivityTimer);
+        // Only set a new timer if the message is from the bot AND it's not an inactivity prompt.
+        if (sender === 'bot' && !options.isInactivityPrompt) {
+            inactivityTimer = setTimeout(() => {
+                addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true });
+            }, 60000); // 60 seconds
+        }
+    }
+
+    function displayLeadSummary(lead) {
+        let summaryText = "Merci ! Veuillez vérifier les informations que vous avez fournies :\n\n";
+        summaryText += `Nom : ${lead.name || 'Non fourni'}\n`;
+        summaryText += `Email : ${lead.email || 'Non fourni'}\n`;
+        summaryText += `Téléphone : ${lead.phone || 'Non fourni'}`;
+
+        addMessage(summaryText, 'bot', {
+            quickReplies: ["C'est correct", "Modifier les informations"]
+        });
     }
 
 
@@ -351,8 +393,13 @@ function toggleChatbox(forceState) {
         toggleTypingIndicator(true);
         chatboxInput.disabled = true;
 
-        if (leadStep === 1) {
-            try {
+        // --- Progress Bar Start ---
+        clearTimeout(progressTimeout);
+        progressTimeout = setTimeout(() => progressBar.classList.add('visible'), 500);
+        // --- Progress Bar End ---
+
+        try {
+            if (leadStep === 1) {
                 const response = await fetch('/api/lead', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -364,60 +411,77 @@ function toggleChatbox(forceState) {
                 const data = await response.json();
                 if (data.status === "success") {
                     window.leadData = data.lead;
-                    addMessage(data.message || "Merci pour ces informations !", 'bot');
+
+                    if (data.complete && leadStep === 1) { // Only show summary once on completion
+                        displayLeadSummary(data.lead);
+                    } else {
+                        addMessage(data.message || "Merci pour ces informations !", 'bot');
+                    }
+
                     leadStep = data.complete ? 2 : 1;
                 } else {
                     throw new Error(data.message || "Erreur serveur");
                 }
-            } catch (e) {
-                addMessage(`Désolé, une erreur est survenue : ${e.message}`, 'bot');
-            } finally {
-                toggleTypingIndicator(false);
-                chatboxInput.disabled = false;
-                chatboxInput.focus();
+            } else { // Handles leadStep 0 and 2
+                const history = chatHistory.map(msg => ({
+                    role: msg.sender === 'user' ? 'user' : 'assistant',
+                    content: msg.text
+                }));
+                const botReply = await sendToBackend(history);
+                addMessage(botReply, 'bot');
+
+                if (leadStep === 0) {
+                    leadExchangeCount++;
+                    if (leadExchangeCount >= 2) {
+                        setTimeout(() => {
+                            addMessage("Au fait, pour mieux vous aider, puis-je connaître votre nom, email et téléphone ?", 'bot');
+                            leadStep = 1;
+                        }, 1000);
+                    }
+                }
             }
+        } catch (e) {
+            addMessage(`Désolé, une erreur est survenue : ${e.message}`, 'bot');
+        } finally {
+            toggleTypingIndicator(false);
+            chatboxInput.disabled = false;
+            chatboxInput.focus();
+            // --- Progress Bar Cleanup ---
+            clearTimeout(progressTimeout);
+            progressBar.classList.remove('visible');
+            // --- Progress Bar Cleanup ---
+        }
+    }
+
+    function applySystemTheme() {
+        // We don't force a theme if one is already set via config (e.g. url params)
+        // This function just sets the default based on OS.
+        const storedTheme = localStorage.getItem('chatbox-theme');
+        if (storedTheme) {
+            document.documentElement.setAttribute('data-theme', storedTheme);
             return;
         }
 
-        // Chat normal ou début
-        if (leadStep === 0) {
-            leadExchangeCount++;
-            const history = chatHistory.map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'assistant',
-                content: msg.text
-            }));
-            history.push({ role: 'user', content: userMessage });
-            const botReply = await sendToBackend(history);
-            toggleTypingIndicator(false);
-            addMessage(botReply, 'bot');
-            chatboxInput.disabled = false;
-            chatboxInput.focus();
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
-            if (leadExchangeCount >= 2) {
-                setTimeout(() => {
-                    addMessage("Au fait, pour mieux vous aider, puis-je connaître votre nom, email et téléphone ?", 'bot');
-                    leadStep = 1;
-                }, 1000);
-            }
-        } else if (leadStep === 2) {
-            // Chat normal après collecte
-            const history = chatHistory.map(msg => ({
-                role: msg.sender === 'user' ? 'user' : 'assistant',
-                content: msg.text
-            }));
-            history.push({ role: 'user', content: userMessage });
-            const botReply = await sendToBackend(history);
-            toggleTypingIndicator(false);
-            addMessage(botReply, 'bot');
-            chatboxInput.disabled = false;
-            chatboxInput.focus();
+        function setTheme(isDark) {
+            const theme = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('chatbox-theme', theme);
         }
+
+        setTheme(prefersDark.matches);
+
+        prefersDark.addEventListener('change', (e) => {
+            setTheme(e.matches);
+        });
     }
 
     // Initialisation UI et listeners déplacée dans init()
     function init() {
         config = loadConfig();
         applyConfig(config);
+        applySystemTheme();
 
         // Initialisation de l'état
         const savedState = localStorage.getItem('chatbox-state');
