@@ -31,10 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------
     const chatboxContainer = document.getElementById('chatbox-container');
     const chatboxMessages = document.getElementById('chatbox-messages');
+    const quickRepliesContainerStatic = document.getElementById('quick-replies-container-static');
     const chatboxForm = document.getElementById('chatbox-form');
     const chatboxInput = document.getElementById('chatbox-input');
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
+    const chatLauncherBubble = document.getElementById('chat-launcher-bubble');
     const progressBar = document.querySelector('.progress-bar');
 
 
@@ -55,16 +57,28 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
     function renderQuickReplies(replies) {
+        // Vider l'ancien contenu
+        quickRepliesContainerStatic.innerHTML = '';
+
+        if (!replies || replies.length === 0) {
+            quickRepliesContainerStatic.style.display = 'none';
+            return;
+        }
+
         const container = document.createElement('div');
-        container.classList.add('quick-replies-container');
+        container.className = 'quick-replies-container';
+
         replies.forEach(replyText => {
             const button = document.createElement('button');
-            button.classList.add('quick-reply-btn');
+            button.className = 'quick-reply-btn';
             button.textContent = replyText;
             button.addEventListener('click', () => handleQuickReplyClick(replyText));
             container.appendChild(button);
         });
-        chatboxMessages.appendChild(container);
+
+        quickRepliesContainerStatic.appendChild(container);
+        quickRepliesContainerStatic.style.display = 'block';
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight; // S'assurer que tout est visible
     }
 
 
@@ -176,9 +190,8 @@ window.leadData = { name: "", email: "", phone: "" };
         messageBubble.appendChild(messageFooter);
         chatboxMessages.appendChild(messageBubble);
 
-        if (!isHistory && options.quickReplies && options.quickReplies.length > 0) {
-            renderQuickReplies(options.quickReplies);
-        }
+        // La gestion des quick replies est maintenant externe à cette fonction
+        // pour éviter qu'ils soient ajoutés au milieu de l'historique.
     }
 
     // =================================================================================
@@ -191,6 +204,14 @@ window.leadData = { name: "", email: "", phone: "" };
         chatHistory.push(messageData);
         saveHistory();
         renderMessage(messageData);
+
+        // Gérer les quick replies seulement pour les messages du bot
+        if (sender === 'bot' && options.quickReplies) {
+            renderQuickReplies(options.quickReplies);
+        } else if (sender === 'user') {
+            renderQuickReplies([]); // Vider les quick replies quand l'utilisateur envoie un message
+        }
+
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 
         // --- Inactivity Timer ---
@@ -198,7 +219,7 @@ window.leadData = { name: "", email: "", phone: "" };
         // Only set a new timer if the message is from the bot AND it's not an inactivity prompt.
         if (sender === 'bot' && !options.isInactivityPrompt) {
             inactivityTimer = setTimeout(() => {
-                addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true });
+                addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true, quickReplies: ['Oui', 'Non'] });
             }, 60000); // 60 seconds
         }
     }
@@ -243,9 +264,7 @@ window.leadData = { name: "", email: "", phone: "" };
     }
 
     function handleQuickReplyClick(text) {
-        const qrContainers = document.querySelectorAll('.quick-replies-container');
-        qrContainers.forEach(container => container.remove());
-        addMessage(text, 'user');
+        addMessage(text, 'user'); // addMessage va maintenant cacher les quick replies
         chatboxInput.value = '';
         handleUserMessage(text); // Appel réel au backend
     }
@@ -266,14 +285,30 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
 function toggleChatbox(forceState) {
-    const isOpen = typeof forceState === 'boolean' 
-        ? forceState 
+    const isOpen = typeof forceState === 'boolean'
+        ? forceState
         : !chatboxContainer.classList.contains('open');
+
     chatboxContainer.classList.toggle('open', isOpen);
     chatLauncher.classList.toggle('hidden', isOpen);
-    localStorage.setItem('chatbox-state', isOpen);
-    // Forcer le recalcul du layout
-    chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+    localStorage.setItem('chatbox-state', String(isOpen));
+
+    // Gérer la bulle de notification
+    if (isOpen) {
+        chatLauncherBubble.classList.remove('visible');
+    } else {
+        // Afficher la bulle après un court délai lorsque le chatbot est fermé
+        setTimeout(() => {
+            // S'assurer que le chatbot n'a pas été rouvert pendant le délai
+            if (!chatboxContainer.classList.contains('open')) {
+                chatLauncherBubble.classList.add('visible');
+            }
+        }, 1000); // Délai de 1 seconde
+    }
+
+    if (isOpen) {
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+    }
 }
 
     // =================================================================================
@@ -500,17 +535,15 @@ function toggleChatbox(forceState) {
         }
 
         // Gestion des événements
-        chatLauncher.addEventListener('click', () => {
-            chatboxContainer.classList.add('open');
-            chatLauncher.classList.add('hidden');
-            localStorage.setItem('chatbox-state', 'true');
-        });
+        chatLauncher.addEventListener('click', () => toggleChatbox(true));
+        closeChatboxBtn.addEventListener('click', () => toggleChatbox(false));
 
-        closeChatboxBtn.addEventListener('click', () => {
-            chatboxContainer.classList.remove('open');
-            chatLauncher.classList.remove('hidden');
-            localStorage.setItem('chatbox-state', 'false');
-        });
+        // Afficher la bulle de notification au démarrage si le chatbot est fermé
+        if (!initialState) {
+            setTimeout(() => {
+                chatLauncherBubble.classList.add('visible');
+            }, 2000); // Délai initial plus long
+        }
 
         // Charger l'historique et afficher le message de bienvenue si nécessaire
         const historyLoaded = loadHistory();
@@ -526,9 +559,7 @@ function toggleChatbox(forceState) {
             e.preventDefault();
             const messageText = chatboxInput.value.trim();
             if (messageText) {
-                const qrContainers = document.querySelectorAll('.quick-replies-container');
-                qrContainers.forEach(container => container.remove());
-                addMessage(messageText, 'user');
+                addMessage(messageText, 'user'); // addMessage va maintenant cacher les quick replies
                 chatboxInput.value = '';
                 handleUserMessage(messageText);
             }
