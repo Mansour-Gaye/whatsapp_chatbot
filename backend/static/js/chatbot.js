@@ -115,13 +115,32 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
     function renderMessage(messageData) {
-        const { text, sender, timestamp, options = {}, isHistory } = messageData;
+        let { text, sender, timestamp, options = {}, isHistory } = messageData;
 
         const typingIndicator = document.getElementById('typing-indicator');
         if (typingIndicator) typingIndicator.remove();
 
         const messageBubble = document.createElement('div');
         messageBubble.classList.add('message-bubble', sender);
+
+        // --- Image Parsing Logic ---
+        const imageRegex = /\[image:\s*([^\]]+)\]/g;
+        const imageMatches = text.match(imageRegex);
+
+        if (imageMatches) {
+            imageMatches.forEach(tag => {
+                const imageName = tag.replace(imageRegex, '$1').trim();
+                const img = document.createElement('img');
+                img.src = `/static/public/${imageName}`;
+                img.alt = imageName;
+                img.style.maxWidth = '100%';
+                img.style.borderRadius = '12px';
+                img.style.marginTop = '8px';
+                messageBubble.appendChild(img);
+            });
+            text = text.replace(imageRegex, '').trim();
+        }
+        // --- End Image Parsing Logic ---
 
         if (text) {
             const messageContent = document.createElement('div');

@@ -36,6 +36,7 @@
     --border-color: #334155;
     --user-message-bg: var(--primary-color);
     --bot-message-bg: #334155;
+
 }
 
 /* Base Styles */
@@ -57,49 +58,13 @@ body {
   position: fixed;
   bottom: calc(var(--spacing-unit) * 3);
   right: calc(var(--spacing-unit) * 3);
-  width: 380px;
+  width: 400px;
   max-width: 90vw;
-  height: 500px;
+  height: 600px;
   max-height: 80vh;
   background: var(--chat-background);
   border-radius: 12px;
   box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(20px);
-  transition: all 0.3s ease;
-  z-index: 1000;
-}
-
-/* Base Styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  line-height: 1.5;
-}
-
-/* Chatbox Container */
-.chatbox-container {
-  position: fixed;
-  bottom: calc(var(--spacing-unit) * 3);
-  right: calc(var(--spacing-unit) * 3);
-  width: 380px;
-  max-width: 90vw;
-  height: 500px;
-  max-height: 80vh;
-  background: var(--chat-bg);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
