@@ -36,6 +36,7 @@
     --border-color: #334155;
     --user-message-bg: var(--primary-color);
     --bot-message-bg: #334155;
+
 }
 
 /* Base Styles */
@@ -341,6 +342,17 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 8px;
+}
+
+.quick-reply-btn {
+  padding: 8px 14px;
+  background: var(--chat-background);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .quick-reply-btn {
