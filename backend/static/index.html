@@ -8,6 +8,7 @@
 </head>
 <body>
     <div id="chatbox-container" class="chatbox-container">
+        <div class="progress-bar"></div>
         <div class="chatbox-header">
             <div class="chatbox-header-avatar">
                 <img src="/static/img/cultural-nuance.png" alt="Bot Avatar" id="bot-avatar">
@@ -16,16 +17,16 @@
                 Assistant IA
             </div>
             <div class="chatbox-header-options">
-                <button id="close-chatbox">_</button>
+                <button id="close-chatbox" aria-label="Fermer le chatbot">_</button>
             </div>
         </div>
-        <div id="chatbox-messages" class="chatbox-messages">
+        <div id="chatbox-messages" class="chatbox-messages" aria-live="polite">
             <!-- Les messages apparaîtront ici -->
         </div>
         <div class="chatbox-input-area">
             <form id="chatbox-form" class="chatbox-form">
-                <input type="text" id="chatbox-input" placeholder="Tapez votre message..." autocomplete="off">
-                <button type="submit" id="chatbox-send">
+                <input type="text" id="chatbox-input" placeholder="Tapez votre message..." autocomplete="off" aria-label="Tapez votre message">
+                <button type="submit" id="chatbox-send" aria-label="Envoyer le message">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                 </button>
             </form>
