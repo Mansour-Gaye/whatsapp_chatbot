@@ -145,7 +145,8 @@ window.leadData = { name: "", email: "", phone: "" };
             imageMatches.forEach(tag => {
                 const imageName = tag.replace(imageRegex, '$1').trim();
                 const img = document.createElement('img');
-                img.src = `/static/public/${imageName}`;
+                // Utiliser un chemin relatif depuis la racine du projet pour plus de robustesse
+                img.src = `backend/static/public/${imageName}`;
                 img.alt = imageName;
                 img.style.maxWidth = '100%';
                 img.style.borderRadius = '12px';
