@@ -149,24 +149,25 @@ body {
 /* Message Bubbles */
 .message-bubble {
   max-width: 80%;
-  padding: 10px 14px;
-  border-radius: 18px;
+  padding: 12px 16px;
+  border-radius: 20px;
   animation: messageAppear 0.3s ease-out;
   position: relative;
+  margin-bottom: 8px; /* Ajout d'une marge inférieure */
 }
 
 .message-bubble.user {
   align-self: flex-end;
   background: var(--user-message-bg);
   color: var(--text-on-primary);
-  border-radius: 18px 4px 18px 18px;
+  border-radius: 20px 8px 20px 20px;
 }
 
 .message-bubble.bot {
   align-self: flex-start;
   background: var(--bot-message-bg);
   color: var(--text-primary);
-  border-radius: 4px 18px 18px 18px;
+  border-radius: 8px 20px 20px 20px;
 }
 
 .message-content {
@@ -337,11 +338,32 @@ body {
 }
 
 /* Quick Replies */
+.quick-replies-container-static {
+    padding: 0 16px 8px 16px;
+    background: var(--chat-background);
+    border-top: 1px solid var(--border-color);
+    display: none; /* Caché par défaut */
+}
+
 .quick-replies-container {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
+  flex-wrap: nowrap; /* Empêche le retour à la ligne */
+  overflow-x: auto; /* Permet le défilement horizontal */
+  padding-bottom: 8px; /* Espace pour la barre de défilement */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.quick-replies-container::-webkit-scrollbar {
+    height: 6px;
+}
+.quick-replies-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+.quick-replies-container::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
 }
 
 .quick-reply-btn {
@@ -353,17 +375,8 @@ body {
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
-}
-
-.quick-reply-btn {
-  padding: 8px 14px;
-  background: var(--chat-background);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  flex-shrink: 0; /* Empêche les boutons de rétrécir */
+  white-space: nowrap; /* Empêche le texte du bouton de se casser */
 }
 
 .quick-reply-btn:hover {
@@ -443,6 +456,30 @@ body {
 #chat-launcher:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-strong);
+}
+
+/* Launcher Bubble */
+.chat-launcher-bubble {
+    position: fixed;
+    bottom: calc(var(--spacing-unit) * 3 + 70px); /* Position above launcher */
+    right: calc(var(--spacing-unit) * 3);
+    padding: 10px 16px;
+    background: var(--primary-color);
+    color: var(--text-on-primary);
+    border-radius: var(--card-border-radius);
+    box-shadow: var(--shadow-soft);
+    font-size: 0.875rem;
+    font-weight: 500;
+    z-index: 998;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
+    transition: all 0.3s ease-out;
+}
+
+.chat-launcher-bubble.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Progress Bar */
