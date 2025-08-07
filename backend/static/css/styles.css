@@ -193,22 +193,34 @@ body {
 .message-content a {
   color: inherit;
   text-decoration: underline;
+  font-weight: 600;
+}
+
+.bot .message-content a {
+    color: var(--primary-color);
+}
+
+.message-content strong {
+    font-weight: 600;
 }
 
 .message-content code {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.1);
   padding: 0.2em 0.4em;
-  border-radius: 3px;
+  border-radius: 4px;
   font-family: monospace;
   font-size: 0.9em;
 }
 
+.bot .message-content code {
+    background: var(--border-color);
+}
+
 .message-content blockquote {
-  border-left: 3px solid var(--primary-accent-color);
+  border-left: 3px solid var(--primary-color);
   margin: 0.5em 0;
   padding-left: 1em;
-  color: inherit;
-  opacity: 0.8;
+  color: var(--text-secondary);
 }
 
 .message-content hr {
@@ -333,13 +345,14 @@ body {
 }
 
 .quick-reply-btn {
-  padding: 6px 12px;
-  background: var(--bot-message-bg);
+  padding: 8px 14px;
+  background: var(--chat-background);
+  color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: 18px;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .quick-reply-btn {
