@@ -66,29 +66,49 @@ def init_supabase():
 init_supabase()
 
 class Lead(BaseModel):
-    name: str = Field(description="Nom complet de l'utilisateur")
-    email: str = Field(description="Adresse e-mail valide de l'utilisateur")
-    phone: str = Field(description="Numéro de téléphone de l'utilisateur")
+    name: Optional[str] = Field(None, description="Nom complet de l'utilisateur")
+    email: Optional[str] = Field(None, description="Adresse e-mail valide de l'utilisateur")
+    phone: Optional[str] = Field(None, description="Numéro de téléphone de l'utilisateur")
 
-def save_lead(lead: Lead) -> bool:
-    """Sauvegarde un lead dans Supabase."""
+def save_lead(lead: Lead, visitor_id: str = None) -> bool:
+    """Sauvegarde ou met à jour un lead dans Supabase en utilisant le visitor_id."""
     try:
         client = get_supabase_client()
         if not client:
             return False
             
-        data = {
-            "name": lead.name,
-            "email": lead.email,
-            "phone": lead.phone,
-            "created_at": datetime.utcnow().isoformat()
-        }
-        
-        result = client.table('leads').insert(data).execute()
-        logger.info(f"Lead sauvegardé avec succès: {lead.model_dump()}")
+        # Préparer les données en filtrant les valeurs non fournies
+        data = {k: v for k, v in lead.model_dump().items() if v}
+
+        # Ne rien faire si aucune donnée n'est fournie
+        if not data:
+            logger.warning("Tentative de sauvegarde d'un lead vide. Opération annulée.")
+            return True # Retourner True pour ne pas bloquer le flux
+
+        # Gérer le timestamp
+        data["updated_at"] = datetime.utcnow().isoformat()
+
+        if visitor_id:
+            data["visitor_id"] = visitor_id
+            # Upsert: met à jour si le visitor_id existe, sinon insère.
+            # 'visitor_id' doit être une contrainte unique (clé primaire ou unique) dans la table Supabase.
+            # La colonne 'on_conflict' doit être celle qui a la contrainte unique.
+            logger.info(f"Tentative d'UPSERT pour le visiteur {visitor_id} avec les données : {data}")
+            result = client.table('leads').upsert(data, on_conflict='visitor_id').execute()
+            logger.info(f"Lead upserted avec succès pour le visiteur {visitor_id}")
+        else:
+            # Ancien comportement si aucun visitor_id n'est fourni
+            data["created_at"] = data.get("updated_at")
+            del data["updated_at"]
+            logger.info(f"Tentative d'INSERT (sans visitor_id) avec les données : {data}")
+            result = client.table('leads').insert(data).execute()
+            logger.info(f"Lead inséré avec succès (sans visitor_id)")
+
         return True
     except Exception as e:
         logger.error(f"Erreur lors de la sauvegarde du lead: {str(e)}")
+        # Afficher le traceback pour un meilleur débogage
+        logger.error(traceback.format_exc())
         return False
 
 def collect_lead_from_text(text: str) -> Lead:

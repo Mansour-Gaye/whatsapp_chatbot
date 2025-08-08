@@ -31,10 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------
     const chatboxContainer = document.getElementById('chatbox-container');
     const chatboxMessages = document.getElementById('chatbox-messages');
+    const quickRepliesContainerStatic = document.getElementById('quick-replies-container-static');
     const chatboxForm = document.getElementById('chatbox-form');
     const chatboxInput = document.getElementById('chatbox-input');
     const closeChatboxBtn = document.getElementById('close-chatbox');
     const chatLauncher = document.getElementById('chat-launcher');
+    const chatLauncherBubble = document.getElementById('chat-launcher-bubble');
     const progressBar = document.querySelector('.progress-bar');
 
 
@@ -42,11 +44,83 @@ document.addEventListener('DOMContentLoaded', () => {
     let config = {};
     let progressTimeout = null;
     let inactivityTimer = null;
+    let visitorId = null; // Variable pour stocker l'ID du visiteur
 
     let leadStep = 0; // 0: chat libre, 1: collecte, 2: chat normal après collecte
     let leadExchangeCount = 0;
-window.leadData = { name: "", email: "", phone: "" };
+    window.leadData = { name: "", email: "", phone: "" };
     let leadMissingFields = [];
+
+
+    // =================================================================================
+    //  FONCTION DE GESTION DU VISITEUR
+    // =================================================================================
+
+    function getOrSetVisitorId() {
+        let id = localStorage.getItem('chatbox-visitor-id');
+        if (!id) {
+            // Génère un ID simple mais suffisamment unique pour ce cas d'usage
+            id = `visitor_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+            localStorage.setItem('chatbox-visitor-id', id);
+        }
+        return id;
+    }
+
+    async function loadInitialData() {
+        if (!visitorId) return;
+
+        try {
+            const response = await fetch('/api/visitor/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ visitorId })
+            });
+
+            if (!response.ok) {
+                console.error("Erreur lors de la récupération des données du visiteur.");
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                // Gérer les informations du lead
+                if (data.lead) {
+                    console.log("Lead trouvé pour ce visiteur:", data.lead);
+                    window.leadData = {
+                        name: data.lead.name || "",
+                        email: data.lead.email || "",
+                        phone: data.lead.phone || ""
+                    };
+                    // Si les informations sont complètes, on saute l'étape de collecte
+                    if (window.leadData.name && window.leadData.email && window.leadData.phone) {
+                        leadStep = 2; // Passe en mode chat normal
+                        console.log("Informations du lead complètes. Passage à l'étape 2.");
+                    }
+                }
+
+                // Gérer l'historique de conversation
+                if (data.history && data.history.length > 0) {
+                    console.log(`Historique de conversation trouvé (${data.history.length} messages). Remplacement de l'historique local.`);
+                    // Remplacer l'historique local par celui du serveur
+                    chatHistory = data.history.map(msg => ({
+                        text: msg.text,
+                        sender: msg.sender === 'assistant' ? 'bot' : 'user', // Assurer la compatibilité du nom
+                        timestamp: new Date(msg.timestamp).getTime()
+                    }));
+
+                    // Vider l'affichage et re-rendre les messages
+                    chatboxMessages.innerHTML = '';
+                    chatHistory.forEach(messageData => renderMessage({ ...messageData, isHistory: true }));
+                    saveHistory(); // Sauvegarder l'historique du serveur dans le localStorage
+                    return true; // Indiquer que l'historique a été chargé depuis le serveur
+                }
+            }
+        } catch (error) {
+            console.error("Erreur dans loadInitialData:", error);
+        }
+        return false; // Indiquer qu'aucun historique n'a été chargé depuis le serveur
+    }
 
 
     // =================================================================================
@@ -55,16 +129,28 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
     function renderQuickReplies(replies) {
+        // Vider l'ancien contenu
+        quickRepliesContainerStatic.innerHTML = '';
+
+        if (!replies || replies.length === 0) {
+            quickRepliesContainerStatic.style.display = 'none';
+            return;
+        }
+
         const container = document.createElement('div');
-        container.classList.add('quick-replies-container');
+        container.className = 'quick-replies-container';
+
         replies.forEach(replyText => {
             const button = document.createElement('button');
-            button.classList.add('quick-reply-btn');
+            button.className = 'quick-reply-btn';
             button.textContent = replyText;
             button.addEventListener('click', () => handleQuickReplyClick(replyText));
             container.appendChild(button);
         });
-        chatboxMessages.appendChild(container);
+
+        quickRepliesContainerStatic.appendChild(container);
+        quickRepliesContainerStatic.style.display = 'block';
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight; // S'assurer que tout est visible
     }
 
 
@@ -131,7 +217,8 @@ window.leadData = { name: "", email: "", phone: "" };
             imageMatches.forEach(tag => {
                 const imageName = tag.replace(imageRegex, '$1').trim();
                 const img = document.createElement('img');
-                img.src = `/static/public/${imageName}`;
+                // Utiliser un chemin relatif depuis la racine du projet pour plus de robustesse
+                img.src = `backend/static/public/${imageName}`;
                 img.alt = imageName;
                 img.style.maxWidth = '100%';
                 img.style.borderRadius = '12px';
@@ -176,9 +263,8 @@ window.leadData = { name: "", email: "", phone: "" };
         messageBubble.appendChild(messageFooter);
         chatboxMessages.appendChild(messageBubble);
 
-        if (!isHistory && options.quickReplies && options.quickReplies.length > 0) {
-            renderQuickReplies(options.quickReplies);
-        }
+        // La gestion des quick replies est maintenant externe à cette fonction
+        // pour éviter qu'ils soient ajoutés au milieu de l'historique.
     }
 
     // =================================================================================
@@ -191,6 +277,14 @@ window.leadData = { name: "", email: "", phone: "" };
         chatHistory.push(messageData);
         saveHistory();
         renderMessage(messageData);
+
+        // Gérer les quick replies seulement pour les messages du bot
+        if (sender === 'bot' && options.quickReplies) {
+            renderQuickReplies(options.quickReplies);
+        } else if (sender === 'user') {
+            renderQuickReplies([]); // Vider les quick replies quand l'utilisateur envoie un message
+        }
+
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 
         // --- Inactivity Timer ---
@@ -198,7 +292,7 @@ window.leadData = { name: "", email: "", phone: "" };
         // Only set a new timer if the message is from the bot AND it's not an inactivity prompt.
         if (sender === 'bot' && !options.isInactivityPrompt) {
             inactivityTimer = setTimeout(() => {
-                addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true });
+                addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true, quickReplies: ['Oui', 'Non'] });
             }, 60000); // 60 seconds
         }
     }
@@ -220,7 +314,7 @@ window.leadData = { name: "", email: "", phone: "" };
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history })
+                body: JSON.stringify({ history, visitorId: visitorId }) // Inclure le visitorId
             });
             if (!response.ok) {
                 // Try to get more details from the response body
@@ -243,9 +337,7 @@ window.leadData = { name: "", email: "", phone: "" };
     }
 
     function handleQuickReplyClick(text) {
-        const qrContainers = document.querySelectorAll('.quick-replies-container');
-        qrContainers.forEach(container => container.remove());
-        addMessage(text, 'user');
+        addMessage(text, 'user'); // addMessage va maintenant cacher les quick replies
         chatboxInput.value = '';
         handleUserMessage(text); // Appel réel au backend
     }
@@ -266,14 +358,30 @@ window.leadData = { name: "", email: "", phone: "" };
 
 
 function toggleChatbox(forceState) {
-    const isOpen = typeof forceState === 'boolean' 
-        ? forceState 
+    const isOpen = typeof forceState === 'boolean'
+        ? forceState
         : !chatboxContainer.classList.contains('open');
+
     chatboxContainer.classList.toggle('open', isOpen);
     chatLauncher.classList.toggle('hidden', isOpen);
-    localStorage.setItem('chatbox-state', isOpen);
-    // Forcer le recalcul du layout
-    chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+    localStorage.setItem('chatbox-state', String(isOpen));
+
+    // Gérer la bulle de notification
+    if (isOpen) {
+        chatLauncherBubble.classList.remove('visible');
+    } else {
+        // Afficher la bulle après un court délai lorsque le chatbot est fermé
+        setTimeout(() => {
+            // S'assurer que le chatbot n'a pas été rouvert pendant le délai
+            if (!chatboxContainer.classList.contains('open')) {
+                chatLauncherBubble.classList.add('visible');
+            }
+        }, 1000); // Délai de 1 seconde
+    }
+
+    if (isOpen) {
+        chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
+    }
 }
 
     // =================================================================================
@@ -377,7 +485,7 @@ function toggleChatbox(forceState) {
     }
 
 
-    function loadHistory() {
+    function loadHistoryFromLocal() {
         const savedHistory = localStorage.getItem('chatbox-history');
         if (savedHistory) {
             chatHistory = JSON.parse(savedHistory);
@@ -409,7 +517,8 @@ function toggleChatbox(forceState) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         input: userMessage,
-                        current_lead: window.leadData
+                        current_lead: window.leadData,
+                        visitorId: visitorId // Inclure le visitorId
                     })
                 });
                 const data = await response.json();
@@ -422,7 +531,7 @@ function toggleChatbox(forceState) {
                         addMessage(data.message || "Merci pour ces informations !", 'bot');
                     }
 
-                    leadStep = data.complete ? 2 : 1;
+                    leadStep = 2; // Toujours passer à l'étape 2 pour ne pas redemander en boucle
                 } else {
                     throw new Error(data.message || "Erreur serveur");
                 }
@@ -482,7 +591,10 @@ function toggleChatbox(forceState) {
     }
 
     // Initialisation UI et listeners déplacée dans init()
-    function init() {
+    async function init() {
+        visitorId = getOrSetVisitorId(); // Récupérer ou créer l'ID du visiteur
+        console.log(`Visitor ID: ${visitorId}`); // Pour le débogage
+
         config = loadConfig();
         applyConfig(config);
         applySystemTheme();
@@ -500,35 +612,35 @@ function toggleChatbox(forceState) {
         }
 
         // Gestion des événements
-        chatLauncher.addEventListener('click', () => {
-            chatboxContainer.classList.add('open');
-            chatLauncher.classList.add('hidden');
-            localStorage.setItem('chatbox-state', 'true');
-        });
+        chatLauncher.addEventListener('click', () => toggleChatbox(true));
+        closeChatboxBtn.addEventListener('click', () => toggleChatbox(false));
 
-        closeChatboxBtn.addEventListener('click', () => {
-            chatboxContainer.classList.remove('open');
-            chatLauncher.classList.remove('hidden');
-            localStorage.setItem('chatbox-state', 'false');
-        });
-
-        // Charger l'historique et afficher le message de bienvenue si nécessaire
-        const historyLoaded = loadHistory();
-        console.log('History loaded:', historyLoaded);
-        if (!historyLoaded) {
-            addMessage(config.welcomeMessage, 'bot', {
-                quickReplies: config.initialQuickReplies
-            });
+        // Afficher la bulle de notification au démarrage si le chatbot est fermé
+        if (!initialState) {
+            setTimeout(() => {
+                chatLauncherBubble.classList.add('visible');
+            }, 2000); // Délai initial plus long
         }
+
+        // Charger l'historique (serveur ou local) et afficher le message de bienvenue si nécessaire
+        const historyLoadedFromServer = await loadInitialData();
+
+        if (!historyLoadedFromServer) {
+            const historyLoadedFromLocal = loadHistoryFromLocal();
+            if (!historyLoadedFromLocal) {
+                addMessage(config.welcomeMessage, 'bot', {
+                    quickReplies: config.initialQuickReplies
+                });
+            }
+        }
+
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 
         chatboxForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const messageText = chatboxInput.value.trim();
             if (messageText) {
-                const qrContainers = document.querySelectorAll('.quick-replies-container');
-                qrContainers.forEach(container => container.remove());
-                addMessage(messageText, 'user');
+                addMessage(messageText, 'user'); // addMessage va maintenant cacher les quick replies
                 chatboxInput.value = '';
                 handleUserMessage(messageText);
             }

@@ -47,7 +47,9 @@ def log_requests(f):
 @log_requests
 def chat():
     data = request.get_json()
-    history = data.get("history", []) # This is the original list of dicts from the request
+    history = data.get("history", [])
+    visitor_id = data.get("visitorId", "unknown_visitor") # Récupérer le visitorId
+
     if not history:
         return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
 
@@ -58,7 +60,7 @@ def chat():
 
         # --- Transformation de l'historique pour LangChain ---
         processed_history_for_llm = []
-        for msg_data in history: # Use original history for transforming for LLM
+        for msg_data in history:
             role = msg_data.get("role", "").lower()
             content = msg_data.get("content", "")
             if role == "user":
@@ -68,62 +70,40 @@ def chat():
 
         # --- Prepend SystemMessage with company context ---
         company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional."
-        # Add SystemMessage to the list that goes to the LLM
         processed_history_for_llm.insert(0, SystemMessage(content=company_context))
         # --- End of SystemMessage ---
-
-        # question = history[-1].get("content", "") if history else "" # Not strictly needed if LLM uses the whole processed_history_for_llm
-
-        # --- Debugging Print Statements (Optional) ---
-        # print(f"[API_CHAT_DEBUG] Type of processed_history_for_llm: {type(processed_history_for_llm)}")
-        # if processed_history_for_llm:
-        #     print(f"[API_CHAT_DEBUG] Type of first element: {type(processed_history_for_llm[0])}")
-        # print(f"[API_CHAT_DEBUG] Content of processed_history_for_llm: {processed_history_for_llm}")
-        # --- End of Debugging ---
 
         response = llm.invoke(processed_history_for_llm) 
 
         # --- Log conversation to Supabase ---
-        if supabase_client:
-            user_id_to_log = "web_chat_session_01" # Placeholder
+        if supabase_client and visitor_id != "unknown_visitor":
             try:
-                # 1. Log System Message (company_context)
-                system_message_data = {
-                    "user_id": user_id_to_log,
-                    "role": "system",
-                    "content": company_context 
+                # 2. Log last user message from history
+                last_user_message = history[-1]
+                user_message_to_log = {
+                    "visitor_id": visitor_id,
+                    "role": "user",
+                    "content": last_user_message.get("content", "")
                 }
-                supabase_client.table("conversations").insert(system_message_data).execute()
-
-                # 2. Log all messages from the original incoming 'history'
-                for msg_data in history: # Iterate original history for logging
-                    role = msg_data.get("role", "unknown").lower()
-                    content = msg_data.get("content", "")
-                    message_to_log = {
-                        "user_id": user_id_to_log,
-                        "role": role,
-                        "content": content
-                    }
-                    supabase_client.table("conversations").insert(message_to_log).execute()
+                supabase_client.table("conversations").insert(user_message_to_log).execute()
 
                 # 3. Log Assistant's final response
                 assistant_response_data = {
-                    "user_id": user_id_to_log,
+                    "visitor_id": visitor_id,
                     "role": "assistant",
                     "content": response.content
                 }
                 supabase_client.table("conversations").insert(assistant_response_data).execute()
                 
-                print("[API_CHAT] Successfully logged full conversation turn to Supabase.")
+                print(f"[API_CHAT] Successfully logged conversation turn for {visitor_id} to Supabase.")
             except Exception as e_log:
-                print(f"[API_CHAT] ERROR logging to Supabase: {e_log}")
+                print(f"[API_CHAT] ERROR logging to Supabase for {visitor_id}: {e_log}")
         # --- End of Supabase logging ---
 
         return jsonify({"status": "success", "response": response.content})
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
-        # Return a meaningful error message for easier debugging
         return jsonify({"status": "error", "response": f"Une erreur interne est survenue: {str(e)}"}), 500
 
 @app.route("/api/lead", methods=["POST"])
@@ -132,6 +112,7 @@ def lead():
     data = request.get_json()
     user_input = data.get("input", "")
     current_lead_data = data.get("current_lead", {})
+    visitor_id = data.get("visitorId") # Récupérer le visitorId
 
     try:
         if not LEAD_GRAPH_FOR_APP_IMPORTED or structured_llm is None or save_lead is None:
@@ -148,21 +129,20 @@ def lead():
         updated_data = current_lead.model_dump()
         new_data = new_info.model_dump()
         for key, value in new_data.items():
-            if value: # Ne met à jour que si une nouvelle valeur a été trouvée
+            if value:
                 updated_data[key] = value
 
         updated_lead = Lead(**updated_data)
 
-        # 4. Vérifie si le lead est complet
+        # 4. Sauvegarde les informations (partielles ou complètes) dans Supabase
+        save_lead(updated_lead, visitor_id=visitor_id)
+
+        # 5. Vérifie si le lead est "suffisamment" complet pour changer de message
         is_complete = all([updated_lead.name, updated_lead.email, updated_lead.phone])
 
-        response_message = "Merci pour ces informations !"
+        response_message = "Merci pour ces informations ! Continuons."
         if is_complete:
-            # 5. Sauvegarde le lead complet dans Supabase
-            if save_lead(updated_lead):
-                response_message = "Merci ! Vos informations ont été enregistrées. Comment puis-je vous aider maintenant ?"
-            else:
-                response_message = "Merci ! Je n'ai pas pu enregistrer vos informations, mais nous pouvons continuer."
+            response_message = "Merci ! Vos informations sont complètes. Comment puis-je vous aider maintenant ?"
 
         return jsonify({
             "status": "success",
@@ -174,6 +154,54 @@ def lead():
     except Exception as e:
         print(f"[API_LEAD] Erreur dans /api/lead: {str(e)}")
         return jsonify({"status": "error", "message": f"Une erreur interne est survenue: {str(e)}"}), 500
+
+@app.route("/api/visitor/lookup", methods=["POST"])
+def visitor_lookup():
+    data = request.get_json()
+    visitor_id = data.get("visitorId")
+
+    if not visitor_id:
+        return jsonify({"status": "error", "message": "visitorId manquant"}), 400
+
+    try:
+        lead_data = None
+        history = []
+
+        # Récupérer les informations du lead
+        lead_response = supabase_client.table("leads").select("*").eq("visitor_id", visitor_id).single().execute()
+        if lead_response.data:
+            lead_data = lead_response.data
+
+        # Récupérer l'historique de la conversation
+        history_response = supabase_client.table("conversations").select("role, content, created_at").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
+        if history_response.data:
+            # Formatter l'historique pour le frontend
+            for item in history_response.data:
+                # Le frontend attend 'sender' et 'text'
+                history.append({
+                    "sender": item['role'],
+                    "text": item['content'],
+                    "timestamp": item['created_at']
+                })
+
+
+        return jsonify({
+            "status": "success",
+            "lead": lead_data,
+            "history": history
+        })
+
+    except Exception as e:
+        # Gérer le cas où .single() ne trouve rien (lance une exception)
+        if "PostgrestError" in str(e) and "0 rows" in str(e):
+             return jsonify({
+                "status": "success",
+                "lead": None,
+                "history": []
+            })
+        print(f"[API_LOOKUP] Erreur dans /api/visitor/lookup: {str(e)}")
+        return jsonify({"status": "error", "message": f"Une erreur interne est survenue: {str(e)}"}), 500
+
 
 @app.route("/health")
 def health():
