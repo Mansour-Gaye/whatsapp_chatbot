@@ -1,7 +1,9 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for, Response
 from supabase import create_client, Client
 from flask_cors import CORS
+import csv
+import io
 
 from whatsapp_webhook import whatsapp
 from functools import wraps
@@ -20,6 +22,11 @@ except ImportError as e:
 
 app = Flask(__name__)
 CORS(app)
+
+# --- Configuration pour l'admin ---
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default-secret-key-for-dev')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin') # Utiliser 'admin' comme mot de passe par défaut pour le dev
+
 app.register_blueprint(whatsapp, url_prefix='/whatsapp')
 
 # Supabase Client Initialization
@@ -213,6 +220,91 @@ from flask import send_from_directory
 @app.route("/chatbot")
 def chatbot_page():
     return send_from_directory("static", "index.html")
+
+# =================================================================
+# Section Admin
+# =================================================================
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin')
+def admin_home():
+    if 'logged_in' in session:
+        return redirect(url_for('admin_dashboard'))
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('admin_dashboard'))
+        else:
+            return 'Mot de passe incorrect', 401
+    return send_from_directory('static', 'admin/login.html')
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    return send_from_directory('static', 'admin/dashboard.html')
+
+# --- API pour l'interface d'administration ---
+
+@app.route('/api/admin/leads', methods=['GET'])
+@login_required
+def get_admin_leads():
+    try:
+        leads_response = supabase_client.table("leads").select("*").order("created_at", desc=True).execute()
+        return jsonify(leads_response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/leads/<visitor_id>/conversations', methods=['GET'])
+@login_required
+def get_lead_conversations(visitor_id):
+    try:
+        history_response = supabase_client.table("conversations").select("role, content, created_at").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
+        return jsonify(history_response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/leads/export', methods=['GET'])
+@login_required
+def export_leads_csv():
+    try:
+        leads_response = supabase_client.table("leads").select("name, email, phone, created_at").execute()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Écrire l'en-tête
+        writer.writerow(['Nom', 'Email', 'Téléphone', 'Date de création'])
+
+        # Écrire les données
+        for lead in leads_response.data:
+            writer.writerow([lead.get('name'), lead.get('email'), lead.get('phone'), lead.get('created_at')])
+
+        output.seek(0)
+
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment;filename=leads.csv"}
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
