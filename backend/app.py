@@ -333,6 +333,8 @@ def update_lead(visitor_id):
 @app.route('/api/admin/leads/<visitor_id>/conversations', methods=['GET'])
 @login_required
 def get_lead_conversations(visitor_id):
+    if not visitor_id or visitor_id in ['null', 'undefined']:
+        return jsonify({"error": "Invalid visitor_id"}), 400
     try:
         history_response = supabase_client.table("conversations").select("role, content, created_at").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
         return jsonify(history_response.data)
