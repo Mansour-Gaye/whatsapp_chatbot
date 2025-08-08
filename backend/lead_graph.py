@@ -184,6 +184,16 @@ def setup_rag():
             "{question}\n\n"
 
             "### 🧠 Instructions Additionnelles ###\n"
+            "- Utilise le **Markdown** pour mettre en valeur les mots importants (**gras**, *italique*, listes).\n"
+            "- Structure tes réponses avec des sauts de ligne (`\\n\\n`) pour l'aération.\n"
+            "- Ajoute des **emojis** pertinents pour rendre la réponse plus chaleureuse et lisible (ex : ✅, 📞, ✉️, 🌍, 👋, etc.).\n"
+            "- Exemple :\n"
+            "Bonjour **Jean Dupont** 👋 !\n\n"
+            "Voici les informations demandées :\n"
+            "- **Email** ✉️ : jean.dupont@example.com\n"
+            "- **Téléphone** 📞 : 0123456789\n"
+            "\n"
+            "N'hésite pas à demander autre chose ! 😊\n"
             "- Si la question est une salutation ou de nature légère, répondez de manière chaleureuse sans invoquer le contexte documentaire.\n"
             "- Si la question concerne les services linguistiques, les langues, les devis, ou l'expertise de TRANSLAB INTERNATIONAL, appuyez-vous sur le contexte documentaire.\n"
             "- N'explicitez **jamais** que vous utilisez un document ou un historique.\n"
@@ -193,6 +203,7 @@ def setup_rag():
             "- Si vous ne disposez pas de l'information demandée, dites-le avec tact et proposez un autre moyen de contact.\n"
             "- **NE PAS** proposer de fonctionnalités ou services qui ne sont pas présents dans le contexte documentaire.\n"
             "- Répondez toujours en **FRANÇAIS**, avec une orthographe irréprochable."
+            
         )
 
         logger.info("Template de prompt créé")
