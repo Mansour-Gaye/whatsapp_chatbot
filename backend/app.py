@@ -4,6 +4,7 @@ from supabase import create_client, Client
 from flask_cors import CORS
 import csv
 import io
+from datetime import datetime, timedelta
 
 from whatsapp_webhook import whatsapp
 from functools import wraps
@@ -262,12 +263,70 @@ def admin_dashboard():
 
 # --- API pour l'interface d'administration ---
 
+@app.route('/api/admin/stats', methods=['GET'])
+@login_required
+def get_admin_stats():
+    try:
+        # 1. Get total number of leads
+        count_response = supabase_client.table("leads").select("*", count='exact').execute()
+        total_leads = count_response.count
+
+        # 2. Get leads from the last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        leads_response = supabase_client.table("leads").select("created_at").gte("created_at", thirty_days_ago.isoformat()).execute()
+
+        # 3. Process data to group by day
+        leads_by_day = { (datetime.utcnow().date() - timedelta(days=i)).strftime('%Y-%m-%d'): 0 for i in range(30) }
+        for lead in leads_response.data:
+            # Ensure correct parsing of timezone-aware timestamp
+            lead_date_str = lead['created_at'].split('T')[0]
+            if lead_date_str in leads_by_day:
+                leads_by_day[lead_date_str] += 1
+
+        # 4. Format for Chart.js, ensuring correct order
+        sorted_dates = sorted(leads_by_day.keys())
+        labels = [datetime.strptime(d, '%Y-%m-%d').strftime('%d %b') for d in sorted_dates]
+        data = [leads_by_day[d] for d in sorted_dates]
+
+        return jsonify({
+            "total_leads": total_leads,
+            "leads_over_time": {
+                "labels": labels,
+                "data": data
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/admin/leads', methods=['GET'])
 @login_required
 def get_admin_leads():
     try:
         leads_response = supabase_client.table("leads").select("*").order("created_at", desc=True).execute()
         return jsonify(leads_response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/leads/<visitor_id>', methods=['PUT'])
+@login_required
+def update_lead(visitor_id):
+    try:
+        data = request.get_json()
+        # Valider/nettoyer les données ici si nécessaire
+        update_data = {
+            "name": data.get("name"),
+            "email": data.get("email"),
+            "phone": data.get("phone"),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+
+        response = supabase_client.table("leads").update(update_data).eq("visitor_id", visitor_id).execute()
+
+        if not response.data:
+            return jsonify({"error": "Lead not found or update failed"}), 404
+
+        return jsonify(response.data[0])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
