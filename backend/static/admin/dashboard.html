@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Tableau de bord</title>
+    <link rel="stylesheet" href="/static/admin/styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>Tableau de bord des Leads</h1>
+            <div>
+                <a href="/api/admin/leads/export" id="export-csv">Exporter en CSV</a>
+                <a href="/admin/logout">Se déconnecter</a>
+            </div>
+        </div>
+
+        <div class="filters">
+            <input type="text" id="name-filter" placeholder="Filtrer par nom...">
+            <input type="text" id="email-filter" placeholder="Filtrer par email...">
+            <input type="date" id="date-filter">
+        </div>
+
+        <div class="table-container">
+            <table class="leads-table">
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Email</th>
+                        <th>Téléphone</th>
+                        <th>Date de Création</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="leads-tbody">
+                    <!-- Les lignes de leads seront insérées ici par JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal pour l'historique de conversation -->
+    <div id="conversation-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Historique de la Conversation</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div id="conversation-history" class="conversation-history">
+                <!-- L'historique sera inséré ici -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/admin/dashboard.js"></script>
+</body>
+</html>
