@@ -44,11 +44,83 @@ document.addEventListener('DOMContentLoaded', () => {
     let config = {};
     let progressTimeout = null;
     let inactivityTimer = null;
+    let visitorId = null; // Variable pour stocker l'ID du visiteur
 
     let leadStep = 0; // 0: chat libre, 1: collecte, 2: chat normal après collecte
     let leadExchangeCount = 0;
-window.leadData = { name: "", email: "", phone: "" };
+    window.leadData = { name: "", email: "", phone: "" };
     let leadMissingFields = [];
+
+
+    // =================================================================================
+    //  FONCTION DE GESTION DU VISITEUR
+    // =================================================================================
+
+    function getOrSetVisitorId() {
+        let id = localStorage.getItem('chatbox-visitor-id');
+        if (!id) {
+            // Génère un ID simple mais suffisamment unique pour ce cas d'usage
+            id = `visitor_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+            localStorage.setItem('chatbox-visitor-id', id);
+        }
+        return id;
+    }
+
+    async function loadInitialData() {
+        if (!visitorId) return;
+
+        try {
+            const response = await fetch('/api/visitor/lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ visitorId })
+            });
+
+            if (!response.ok) {
+                console.error("Erreur lors de la récupération des données du visiteur.");
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                // Gérer les informations du lead
+                if (data.lead) {
+                    console.log("Lead trouvé pour ce visiteur:", data.lead);
+                    window.leadData = {
+                        name: data.lead.name || "",
+                        email: data.lead.email || "",
+                        phone: data.lead.phone || ""
+                    };
+                    // Si les informations sont complètes, on saute l'étape de collecte
+                    if (window.leadData.name && window.leadData.email && window.leadData.phone) {
+                        leadStep = 2; // Passe en mode chat normal
+                        console.log("Informations du lead complètes. Passage à l'étape 2.");
+                    }
+                }
+
+                // Gérer l'historique de conversation
+                if (data.history && data.history.length > 0) {
+                    console.log(`Historique de conversation trouvé (${data.history.length} messages). Remplacement de l'historique local.`);
+                    // Remplacer l'historique local par celui du serveur
+                    chatHistory = data.history.map(msg => ({
+                        text: msg.text,
+                        sender: msg.sender === 'assistant' ? 'bot' : 'user', // Assurer la compatibilité du nom
+                        timestamp: new Date(msg.timestamp).getTime()
+                    }));
+
+                    // Vider l'affichage et re-rendre les messages
+                    chatboxMessages.innerHTML = '';
+                    chatHistory.forEach(messageData => renderMessage({ ...messageData, isHistory: true }));
+                    saveHistory(); // Sauvegarder l'historique du serveur dans le localStorage
+                    return true; // Indiquer que l'historique a été chargé depuis le serveur
+                }
+            }
+        } catch (error) {
+            console.error("Erreur dans loadInitialData:", error);
+        }
+        return false; // Indiquer qu'aucun historique n'a été chargé depuis le serveur
+    }
 
 
     // =================================================================================
@@ -242,7 +314,7 @@ window.leadData = { name: "", email: "", phone: "" };
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history })
+                body: JSON.stringify({ history, visitorId: visitorId }) // Inclure le visitorId
             });
             if (!response.ok) {
                 // Try to get more details from the response body
@@ -413,7 +485,7 @@ function toggleChatbox(forceState) {
     }
 
 
-    function loadHistory() {
+    function loadHistoryFromLocal() {
         const savedHistory = localStorage.getItem('chatbox-history');
         if (savedHistory) {
             chatHistory = JSON.parse(savedHistory);
@@ -445,7 +517,8 @@ function toggleChatbox(forceState) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         input: userMessage,
-                        current_lead: window.leadData
+                        current_lead: window.leadData,
+                        visitorId: visitorId // Inclure le visitorId
                     })
                 });
                 const data = await response.json();
@@ -458,7 +531,7 @@ function toggleChatbox(forceState) {
                         addMessage(data.message || "Merci pour ces informations !", 'bot');
                     }
 
-                    leadStep = data.complete ? 2 : 1;
+                    leadStep = 2; // Toujours passer à l'étape 2 pour ne pas redemander en boucle
                 } else {
                     throw new Error(data.message || "Erreur serveur");
                 }
@@ -518,7 +591,10 @@ function toggleChatbox(forceState) {
     }
 
     // Initialisation UI et listeners déplacée dans init()
-    function init() {
+    async function init() {
+        visitorId = getOrSetVisitorId(); // Récupérer ou créer l'ID du visiteur
+        console.log(`Visitor ID: ${visitorId}`); // Pour le débogage
+
         config = loadConfig();
         applyConfig(config);
         applySystemTheme();
@@ -546,14 +622,18 @@ function toggleChatbox(forceState) {
             }, 2000); // Délai initial plus long
         }
 
-        // Charger l'historique et afficher le message de bienvenue si nécessaire
-        const historyLoaded = loadHistory();
-        console.log('History loaded:', historyLoaded);
-        if (!historyLoaded) {
-            addMessage(config.welcomeMessage, 'bot', {
-                quickReplies: config.initialQuickReplies
-            });
+        // Charger l'historique (serveur ou local) et afficher le message de bienvenue si nécessaire
+        const historyLoadedFromServer = await loadInitialData();
+
+        if (!historyLoadedFromServer) {
+            const historyLoadedFromLocal = loadHistoryFromLocal();
+            if (!historyLoadedFromLocal) {
+                addMessage(config.welcomeMessage, 'bot', {
+                    quickReplies: config.initialQuickReplies
+                });
+            }
         }
+
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 
         chatboxForm.addEventListener('submit', (e) => {
