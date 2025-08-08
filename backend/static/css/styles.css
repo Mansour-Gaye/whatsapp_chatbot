@@ -645,6 +645,41 @@ body {
   left: calc(var(--spacing-unit) * 3);
 }
 
+/* -------------------- */
+/* CUSTOM CONTRAST FIX  */
+/* -------------------- */
+
+/* --- User Message Bubble (Blue Background) --- */
+
+/* Make links and emails stand out more */
+.message-bubble.user .message-content a {
+  color: #ffffff;
+  font-weight: 700; /* Bolder */
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* Make timestamp fully opaque for max readability */
+.message-bubble.user .message-timestamp {
+  color: #ffffff;
+  opacity: 1;
+}
+
+
+/* --- Bot Message Bubble (Light/Dark Background) --- */
+
+/* Improve link contrast on dark bot bubbles */
+[data-theme="dark"] .message-bubble.bot .message-content a {
+  color: var(--secondary-color); /* Use the lighter blue from dark theme vars */
+  font-weight: 600;
+}
+
+/* Improve timestamp contrast on dark bot bubbles */
+[data-theme="dark"] .message-bubble.bot .message-timestamp {
+  color: var(--text-secondary); /* Uses a lighter gray from dark theme vars */
+  opacity: 0.9;
+}
+
 #chat-launcher.bottom-left {
   right: auto;
   left: calc(var(--spacing-unit) * 3);
