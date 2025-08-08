@@ -63,16 +63,19 @@ document.addEventListener('DOMContentLoaded', () => {
         leads.forEach(lead => {
             const tr = document.createElement('tr');
             tr.className = 'border-b dark:border-gray-700';
+            const historyDisabled = !lead.visitor_id ? 'disabled opacity-50 cursor-not-allowed' : '';
+            const editDisabled = !lead.visitor_id ? 'disabled opacity-50 cursor-not-allowed' : '';
+
             tr.innerHTML = `
                 <td class="p-4">${lead.name || 'N/A'}</td>
                 <td class="p-4">${lead.email || 'N/A'}</td>
                 <td class="p-4">${lead.phone || 'N/A'}</td>
                 <td class="p-4">${new Date(lead.created_at).toLocaleString('fr-FR')}</td>
                 <td class="p-4 space-x-2">
-                    <button class="history-button text-blue-500 hover:underline" data-visitor-id="${lead.visitor_id}" data-lead-name="${lead.name || 'Inconnu'}">
+                    <button class="history-button text-blue-500 hover:underline ${historyDisabled}" data-visitor-id="${lead.visitor_id}" data-lead-name="${lead.name || 'Inconnu'}" ${historyDisabled}>
                         Historique
                     </button>
-                    <button class="edit-button text-green-500 hover:underline" data-visitor-id="${lead.visitor_id}">
+                    <button class="edit-button text-green-500 hover:underline ${editDisabled}" data-visitor-id="${lead.visitor_id}" ${editDisabled}>
                         Modifier
                     </button>
                 </td>
