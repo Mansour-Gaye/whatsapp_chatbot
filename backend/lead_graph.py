@@ -265,20 +265,15 @@ def get_simple_image_chain():
     Crée une chaîne simple, sans RAG, pour répondre spécifiquement aux demandes d'images.
     """
     image_prompt = ChatPromptTemplate.from_template(
-        "Vous êtes un assistant virtuel pour TRANSLAB INTERNATIONAL.\n"
-        "L'utilisateur a demandé une photo concernant la question suivante : '{question}'.\n"
-        "Votre tâche est de choisir l'image la plus pertinente dans cette liste : {available_images}.\n\n"
-        "Vous devez formater votre réponse EXACTEMENT comme suit, sans rien ajouter d'autre :\n"
-        "```\n"
-        "[image: nom_de_l_image.ext]\n"
-        "Message amical ici.\n"
-        "```\n\n"
-        "Par exemple, si l'image est 'service1.png', une bonne réponse serait :\n"
-        "```\n"
-        "[image: service1.png]\n"
-        "Absolument ! Voici une photo de nos services.\n"
-        "```\n\n"
-        "Ne dites JAMAIS que vous ne pouvez pas montrer d'images."
+        "TACHE : Répondre à une demande d'image.\n"
+        "QUESTION DE L'UTILISATEUR : '{question}'\n"
+        "IMAGES DISPONIBLES : {available_images}\n"
+        "INSTRUCTIONS :\n"
+        "1. Choisis la meilleure image de la liste.\n"
+        "2. Ta réponse DOIT commencer par la balise de l'image, comme `[image: nom_de_l_image.ext]`.\n"
+        "3. Après la balise, ajoute un court message amical.\n"
+        "EXEMPLE DE RÉPONSE PARFAITE : [image: service1.png]\nBonjour ! Voici l'image que vous avez demandée.\n"
+        "NE PAS FAIRE : Ne jamais dire que tu ne peux pas montrer d'images. Ne jamais écrire le nom du fichier en dehors de la balise `[image: ...]`."
     )
 
     image_chain = RunnableMap({
