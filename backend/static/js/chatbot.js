@@ -233,6 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const messageContent = document.createElement('div');
             messageContent.classList.add('message-content');
             if (sender === 'bot') {
+                console.log("Bot message (raw):", text);
                 messageContent.innerHTML = DOMPurify.sanitize(marked.parse(text));
             } else {
                 messageContent.textContent = text;

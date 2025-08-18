@@ -131,7 +131,7 @@ def save_lead_to_sqlite(lead: Lead, db_path=None):
     """Fonction de compatibilité qui utilise save_lead."""
     return save_lead(lead)
 
-llm = ChatGroq(model="llama3-8b-8192", temperature=0, groq_api_key=os.getenv("GROQ_API_KEY") or "...")
+llm = ChatGroq(model="gemma2-9b-it", temperature=0, groq_api_key=os.getenv("GROQ_API_KEY") or "...")
 logger.info(f"LLM initialisé: {llm is not None}")
 
 structured_llm = llm.with_structured_output(Lead) if llm else None
@@ -206,7 +206,7 @@ def setup_rag():
             "### 🧠 Instructions Additionnelles ###\n"
             "- Utilise le **Markdown** pour mettre en valeur les mots importants (**gras**, *italique*, listes).\n"
             "- Structure tes réponses avec des sauts de ligne (`\\n\\n`) pour l'aération.\n"
-            "- Ajoute des **emojis** pertinents pour rendre la réponse plus chaleureuse et lisible (ex : ✅, 📞, ✉️, 🌍, 👋, etc.).\n"
+            "- Ajoute des **emojis** pertinents (c'est important) pour rendre la réponse plus chaleureuse et lisible (ex : ✅, 📞, ✉️, 🌍, 👋, etc.).\n"
             "- Exemple :\n"
             "Bonjour **Jean Dupont** 👋 !\n\n"
             "Voici les informations demandées :\n"
