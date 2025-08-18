@@ -4,8 +4,8 @@
 
 :root {
     /* Main Palette */
-    --primary-color: #2563eb;
-    --secondary-color: #1e40af;
+    --primary-color: #3366CC; /* New: Less saturated blue */
+    --secondary-color: #2C52A3; /* New: Darker blue for hover */
 
     /* Light Theme */
     --chat-background: #ffffff;
@@ -13,9 +13,9 @@
     --text-primary: #1e293b;
     --text-secondary: #475569;
     --text-on-primary: #ffffff;
-    --border-color: #e2e8f0;
+    --border-color: #CCCCCC; /* New: Gray for borders */
     --user-message-bg: var(--primary-color);
-    --bot-message-bg: #f1f5f9;
+    --bot-message-bg: #E0E0E0; /* New: Lighter gray for user bubble */
 
     /* General UI */
     --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -25,17 +25,17 @@
 }
 
 [data-theme="dark"] {
-    --primary-color: #3b82f6; /* Lighter blue for dark mode */
-    --secondary-color: #60a5fa;
+    --primary-color: #3366CC; /* New: Consistent blue */
+    --secondary-color: #2C52A3; /* New: Consistent hover */
 
     --chat-background: #1e293b;
     --page-background: #0f172a;
     --text-primary: #f1f5f9;
     --text-secondary: #94a3b8;
     --text-on-primary: #ffffff;
-    --border-color: #334155;
+    --border-color: #555555; /* New: Darker gray border */
     --user-message-bg: var(--primary-color);
-    --bot-message-bg: #334155;
+    --bot-message-bg: #424242; /* New: Dark gray for user bubble */
 
 }
 
@@ -140,7 +140,8 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 12px; /* Increased gap for better separation */
+
   scroll-behavior: smooth;
   min-height: 300px;
   height: 100%;
@@ -149,25 +150,27 @@ body {
 /* Message Bubbles */
 .message-bubble {
   max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 20px;
+  padding: 10px 14px; /* Adjusted padding */
+  border-radius: 12px; /* Uniform radius */
   animation: messageAppear 0.3s ease-out;
   position: relative;
-  margin-bottom: 8px; /* Ajout d'une marge inférieure */
+  margin-bottom: 8px; /* Increased margin for better separation */
+
+  box-shadow: var(--shadow-soft);
+  font-size: 14px; /* Set font size */
 }
 
 .message-bubble.user {
   align-self: flex-end;
-  background: var(--user-message-bg);
-  color: var(--text-on-primary);
-  border-radius: 20px 8px 20px 20px;
+  background: var(--bot-message-bg);
+  color: #222222; /* New: High-contrast dark gray text */
+
 }
 
 .message-bubble.bot {
   align-self: flex-start;
-  background: var(--bot-message-bg);
-  color: var(--text-primary);
-  border-radius: 8px 20px 20px 20px;
+  background: var(--user-message-bg);
+  color: var(--text-on-primary);
 }
 
 .message-content {
@@ -305,6 +308,7 @@ body {
   font-size: 0.875rem;
   font-family: inherit;
   transition: border-color 0.2s;
+  color: #000000; /* New: Black text for input */
 }
 
 #chatbox-input:focus {
