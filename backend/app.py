@@ -44,6 +44,10 @@ if supabase_url and supabase_key:
 else:
     print("[APP_INIT] WARNING: SUPABASE_URL and/or SUPABASE_KEY environment variables not set. Supabase integration will be disabled.")
 
+# Groq API Key Check
+if not os.environ.get("GROQ_API_KEY"):
+    print("[APP_INIT] CRITICAL: GROQ_API_KEY environment variable is not set. The chat API will not work.")
+
 def log_requests(f):
     """Un décorateur simple pour logger les requêtes (désactivé par défaut)."""
     @wraps(f)
@@ -221,6 +225,12 @@ from flask import send_from_directory
 @app.route("/chatbot")
 def chatbot_page():
     return send_from_directory("static", "index.html")
+
+
+@app.route("/demo")
+def demo_page():
+    return send_from_directory(os.path.dirname(app.root_path), "example.html")
+
 
 # =================================================================
 # Section Admin
