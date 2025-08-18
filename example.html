@@ -27,7 +27,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 </head>
-<body>
+<body style="background-image: url('backend/static/img/fond_pour_demo.png'); background-size: cover; background-position: center; background-attachment: fixed;">
 
     <h1>Page d'Exemple pour la Chatbox</h1>
     <p>
@@ -47,12 +47,12 @@
         window.chatboxConfig = {
             position: 'bottom-right',
             theme: {
-                primary: '#5A3E8A', // Une couleur violette
-                userMessageBg: '#5A3E8A',
+                primary: '#4f46e5', // Indigo
+                userMessageBg: '#4f46e5',
             },
             header: {
                 title: 'Mon Assistant Personnalisé',
-                botAvatar: 'https://raw.githubusercontent.com/all-contributors/all-contributors/main/assets/logo-sm.png' // Un avatar d'exemple
+                botAvatar: 'backend/static/img/avatar.png'
             },
             welcomeMessage: 'Bienvenue sur cette page de démo ! Posez-moi une question.',
             initialQuickReplies: ['Montre-moi un produit', 'Quelle est ta couleur ?', 'Aide']
@@ -71,7 +71,7 @@
         <div class="progress-bar"></div>
         <div class="chatbox-header">
             <div class="chatbox-header-avatar">
-                <img src="backend/static/img/cultural-nuance.png" alt="Bot Avatar" id="bot-avatar">
+                <img src="backend/static/img/avatar.png" alt="Bot Avatar" id="bot-avatar">
             </div>
             <div class="chatbox-header-title">
                 Assistant IA
