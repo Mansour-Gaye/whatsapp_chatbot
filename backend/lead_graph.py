@@ -65,6 +65,26 @@ def init_supabase():
 # Initialiser Supabase au démarrage
 init_supabase()
 
+# --- Gestion des images disponibles ---
+IMAGE_DIR = os.path.join(os.path.dirname(__file__), 'static', 'public')
+
+def get_available_images():
+    """Scans the image directory and returns a list of filenames."""
+    try:
+        if not os.path.exists(IMAGE_DIR):
+            logger.warning(f"Le répertoire d'images n'existe pas : {IMAGE_DIR}")
+            return []
+        image_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+        files = [f for f in os.listdir(IMAGE_DIR) if os.path.splitext(f)[1].lower() in image_extensions]
+        return files
+    except Exception as e:
+        logger.error(f"Erreur lors du scan du répertoire d'images : {e}")
+        return []
+
+AVAILABLE_IMAGES = get_available_images()
+logger.info(f"Images disponibles trouvées : {AVAILABLE_IMAGES}")
+# --- Fin de la gestion des images ---
+
 class Lead(BaseModel):
     name: Optional[str] = Field(None, description="Nom complet de l'utilisateur")
     email: Optional[str] = Field(None, description="Adresse e-mail valide de l'utilisateur")
@@ -197,6 +217,10 @@ def setup_rag():
             "### 📚 Contexte Documentaire (si disponible) ###\n"
             "{context}\n\n"
 
+            "### 🖼️ Images Disponibles (Optionnel) ###\n"
+            "Si la question de l'utilisateur le justifie (par exemple, s'il demande une photo ou une illustration), tu peux inclure UNE SEULE image dans ta réponse en utilisant la balise `[image: nom_du_fichier.ext]`. "
+            "Tu ne dois **jamais** inventer un nom de fichier. Voici la liste **exhaustive** des images que tu peux utiliser : {available_images}\n\n"
+
             "### 💬 Historique de Conversation (si disponible) ###\n"
             "{history}\n\n"
 
@@ -232,7 +256,8 @@ def setup_rag():
         rag_chain = RunnableMap({
             "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
             "question": lambda x: x["question"],
-            "history": lambda x: x.get("history", [])
+            "history": lambda x: x.get("history", []),
+            "available_images": lambda x: ", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune"
         }) | prompt | llm
         
         logger.info("Chaîne RAG créée avec succès")

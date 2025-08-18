@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let progressTimeout = null;
     let inactivityTimer = null;
     let visitorId = null; // Variable pour stocker l'ID du visiteur
+    let hasUserInteracted = false; // Pour suivre l'interaction de l'utilisateur
 
     let leadStep = 0; // 0: chat libre, 1: collecte, 2: chat normal après collecte
     let leadExchangeCount = 0;
@@ -284,14 +285,15 @@ document.addEventListener('DOMContentLoaded', () => {
             renderQuickReplies(options.quickReplies);
         } else if (sender === 'user') {
             renderQuickReplies([]); // Vider les quick replies quand l'utilisateur envoie un message
+            hasUserInteracted = true; // L'utilisateur a interagi
         }
 
         chatboxMessages.scrollTop = chatboxMessages.scrollHeight;
 
         // --- Inactivity Timer ---
         clearTimeout(inactivityTimer);
-        // Only set a new timer if the message is from the bot AND it's not an inactivity prompt.
-        if (sender === 'bot' && !options.isInactivityPrompt) {
+        // Only set a new timer if the message is from the bot, it's not an inactivity prompt, AND the user has interacted at least once.
+        if (hasUserInteracted && sender === 'bot' && !options.isInactivityPrompt) {
             inactivityTimer = setTimeout(() => {
                 addMessage("Puis-je vous aider avec autre chose ?", 'bot', { isInactivityPrompt: true, quickReplies: ['Oui', 'Non'] });
             }, 60000); // 60 seconds
