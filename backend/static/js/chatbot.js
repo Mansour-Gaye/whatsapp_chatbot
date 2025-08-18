@@ -218,8 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
             imageMatches.forEach(tag => {
                 const imageName = tag.replace(imageRegex, '$1').trim();
                 const img = document.createElement('img');
-                // Utiliser un chemin relatif depuis la racine du projet pour plus de robustesse
-                img.src = `backend/static/public/${imageName}`;
+                // Le chemin doit être relatif à la racine du serveur web, qui sert le dossier 'static'
+                img.src = `/static/public/${imageName}`;
                 img.alt = imageName;
                 img.style.maxWidth = '100%';
                 img.style.borderRadius = '12px';

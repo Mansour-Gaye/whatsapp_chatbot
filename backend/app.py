@@ -12,14 +12,14 @@ from functools import wraps
 # --- Section d'importation des modules de traitement ---
 try:
     # Importation sélective pour la clarté
-    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain # Ajout de get_rag_chain
+    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain, get_simple_image_chain
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, get_rag_chain = None, None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, get_rag_chain, get_simple_image_chain = None, None, None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
@@ -66,35 +66,40 @@ def chat():
         return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
 
     try:
-        # --- Utilisation de la chaîne RAG ---
-        rag_chain = get_rag_chain()
-        if not rag_chain:
-            print("[API_CHAT] CRITICAL: RAG chain is not available.")
-            raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
-
-        # Extraire la dernière question et formater l'historique
         last_user_message = history[-1]["content"]
 
-        # Formatter l'historique précédent pour le prompt
-        formatted_history = []
-        for msg in history[:-1]:
-            role = "Utilisateur" if msg.get("role") == "user" else "Assistant"
-            formatted_history.append(f"{role}: {msg.get('content')}")
+        # --- Logique de routage de chaîne ---
+        image_keywords = ["photo", "image", "illustration", "montrer"]
+        if any(keyword in last_user_message.lower() for keyword in image_keywords):
+            print("[API_CHAT] Image request detected. Using simple image chain.")
+            chain = get_simple_image_chain()
+            if not chain:
+                raise Exception("La chaîne de traitement d'images n'est pas disponible.")
 
-        history_str = "\n".join(formatted_history)
+            response = chain.invoke({"question": last_user_message})
+        else:
+            print("[API_CHAT] Standard request. Using RAG chain.")
+            chain = get_rag_chain()
+            if not chain:
+                raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
 
-        # Invoquer la chaîne RAG
-        response = rag_chain.invoke({
-            "question": last_user_message,
-            "history": history_str
-        })
+            # Formatter l'historique précédent pour le prompt
+            formatted_history = []
+            for msg in history[:-1]:
+                role = "Utilisateur" if msg.get("role") == "user" else "Assistant"
+                formatted_history.append(f"{role}: {msg.get('content')}")
+            history_str = "\n".join(formatted_history)
+
+            response = chain.invoke({
+                "question": last_user_message,
+                "history": history_str
+            })
 
         response_content = response.content if hasattr(response, 'content') else str(response)
 
         # --- Log conversation to Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
             try:
-                # Log du dernier message utilisateur
                 user_message_to_log = {
                     "visitor_id": visitor_id,
                     "role": "user",
@@ -102,7 +107,6 @@ def chat():
                 }
                 supabase_client.table("conversations").insert(user_message_to_log).execute()
 
-                # Log de la réponse de l'assistant
                 assistant_response_data = {
                     "visitor_id": visitor_id,
                     "role": "assistant",

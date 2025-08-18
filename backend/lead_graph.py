@@ -228,7 +228,8 @@ def setup_rag():
             "2.  **Instruction Spéciale pour les Images :** Si la question de l'utilisateur demande une 'photo', une 'image', ou une 'illustration', vous DEVEZ inclure une image dans votre réponse. Pour ce faire, insérez la balise `[image: nom_du_fichier.ext]`.\n"
             "    -   Voici la liste **EXHAUSTIVE** des images que vous pouvez utiliser : **{available_images}**.\n"
             "    -   Ne choisissez qu'UNE SEULE image pertinente dans cette liste.\n"
-            "    -   **Interdiction :** Ne dites JAMAIS que vous ne pouvez pas afficher d'images. Si aucune image ne correspond, décrivez simplement le service par texte sans mentionner votre incapacité à montrer une image.\n"
+            "    -   **Interdiction :** Ne dites JAMAIS que vous ne pouvez pas afficher d'images. Une fois que vous avez inclus la balise `[image: ...]`, ne mentionnez plus les images ou votre capacité à les montrer dans le reste du texte.\n"
+            "    -   Si aucune image ne correspond, décrivez simplement le service par texte sans mentionner votre incapacité à montrer une image.\n"
             "3.  Adoptez un ton professionnel, fluide, rassurant et humain.\n"
             "4.  Répondez toujours en FRANÇAIS, avec une orthographe irréprochable."
         )
@@ -258,6 +259,34 @@ logger.info(f"Chaîne RAG initialisée: {_rag_chain_instance is not None}")
 def get_rag_chain():
     """Retourne l'instance du RAG chain."""
     return _rag_chain_instance
+
+def get_simple_image_chain():
+    """
+    Crée une chaîne simple, sans RAG, pour répondre spécifiquement aux demandes d'images.
+    """
+    image_prompt = ChatPromptTemplate.from_template(
+        "Vous êtes un assistant virtuel pour TRANSLAB INTERNATIONAL.\n"
+        "L'utilisateur a demandé une photo concernant la question suivante : '{question}'.\n"
+        "Votre tâche est de choisir l'image la plus pertinente dans cette liste : {available_images}.\n\n"
+        "Vous devez formater votre réponse EXACTEMENT comme suit, sans rien ajouter d'autre :\n"
+        "```\n"
+        "[image: nom_de_l_image.ext]\n"
+        "Message amical ici.\n"
+        "```\n\n"
+        "Par exemple, si l'image est 'service1.png', une bonne réponse serait :\n"
+        "```\n"
+        "[image: service1.png]\n"
+        "Absolument ! Voici une photo de nos services.\n"
+        "```\n\n"
+        "Ne dites JAMAIS que vous ne pouvez pas montrer d'images."
+    )
+
+    image_chain = RunnableMap({
+        "question": lambda x: x["question"],
+        "available_images": lambda x: ", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune"
+    }) | image_prompt | llm
+
+    return image_chain
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")
