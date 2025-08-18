@@ -226,6 +226,7 @@ from flask import send_from_directory
 def chatbot_page():
     return send_from_directory("static", "index.html")
 
+
 @app.route("/demo")
 def demo_page():
     return send_from_directory(os.path.dirname(app.root_path), "example.html")
