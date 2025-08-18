@@ -12,14 +12,14 @@ from functools import wraps
 # --- Section d'importation des modules de traitement ---
 try:
     # Importation sélective pour la clarté
-    from lead_graph import structured_llm, save_lead, llm, Lead
+    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain # Ajout de get_rag_chain
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage = None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, get_rag_chain = None, None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
@@ -60,50 +60,53 @@ def log_requests(f):
 def chat():
     data = request.get_json()
     history = data.get("history", [])
-    visitor_id = data.get("visitorId", "unknown_visitor") # Récupérer le visitorId
+    visitor_id = data.get("visitorId", "unknown_visitor")
 
     if not history:
         return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
 
     try:
-        if not LEAD_GRAPH_FOR_APP_IMPORTED or llm is None or HumanMessage is None:
-            print("[API_CHAT] LLM or message components not available.")
-            raise Exception("LLM not configured for chat API")
+        # --- Utilisation de la chaîne RAG ---
+        rag_chain = get_rag_chain()
+        if not rag_chain:
+            print("[API_CHAT] CRITICAL: RAG chain is not available.")
+            raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
 
-        # --- Transformation de l'historique pour LangChain ---
-        processed_history_for_llm = []
-        for msg_data in history:
-            role = msg_data.get("role", "").lower()
-            content = msg_data.get("content", "")
-            if role == "user":
-                processed_history_for_llm.append(HumanMessage(content=content))
-            elif role in ("assistant", "ai"):
-                processed_history_for_llm.append(AIMessage(content=content))
+        # Extraire la dernière question et formater l'historique
+        last_user_message = history[-1]["content"]
 
-        # --- Prepend SystemMessage with company context ---
-        company_context = "You are a helpful assistant for TRANSLAB INTERNATIONAL. Be polite and professional."
-        processed_history_for_llm.insert(0, SystemMessage(content=company_context))
-        # --- End of SystemMessage ---
+        # Formatter l'historique précédent pour le prompt
+        formatted_history = []
+        for msg in history[:-1]:
+            role = "Utilisateur" if msg.get("role") == "user" else "Assistant"
+            formatted_history.append(f"{role}: {msg.get('content')}")
 
-        response = llm.invoke(processed_history_for_llm) 
+        history_str = "\n".join(formatted_history)
+
+        # Invoquer la chaîne RAG
+        response = rag_chain.invoke({
+            "question": last_user_message,
+            "history": history_str
+        })
+
+        response_content = response.content if hasattr(response, 'content') else str(response)
 
         # --- Log conversation to Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
             try:
-                # 2. Log last user message from history
-                last_user_message = history[-1]
+                # Log du dernier message utilisateur
                 user_message_to_log = {
                     "visitor_id": visitor_id,
                     "role": "user",
-                    "content": last_user_message.get("content", "")
+                    "content": last_user_message
                 }
                 supabase_client.table("conversations").insert(user_message_to_log).execute()
 
-                # 3. Log Assistant's final response
+                # Log de la réponse de l'assistant
                 assistant_response_data = {
                     "visitor_id": visitor_id,
                     "role": "assistant",
-                    "content": response.content
+                    "content": response_content
                 }
                 supabase_client.table("conversations").insert(assistant_response_data).execute()
                 
@@ -112,7 +115,7 @@ def chat():
                 print(f"[API_CHAT] ERROR logging to Supabase for {visitor_id}: {e_log}")
         # --- End of Supabase logging ---
 
-        return jsonify({"status": "success", "response": response.content})
+        return jsonify({"status": "success", "response": response_content})
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
