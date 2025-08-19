@@ -12,7 +12,7 @@ from functools import wraps
 # --- Section d'importation des modules de traitement ---
 try:
     # Importation sélective pour la clarté
-    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain # Ajout de get_rag_chain
+    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
@@ -66,30 +66,27 @@ def chat():
         return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
 
     try:
-        # --- Utilisation de la chaîne RAG ---
         rag_chain = get_rag_chain()
         if not rag_chain:
             print("[API_CHAT] CRITICAL: RAG chain is not available.")
             raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
 
-        # Extraire la dernière question et formater l'historique
         last_user_message = history[-1]["content"]
         
-        # Formatter l'historique précédent pour le prompt
         formatted_history = []
         for msg in history[:-1]:
             role = "Utilisateur" if msg.get("role") == "user" else "Assistant"
             formatted_history.append(f"{role}: {msg.get('content')}")
-        
         history_str = "\n".join(formatted_history)
 
-        # Invoquer la chaîne RAG
-        response = rag_chain.invoke({
+        # La chaîne RAG retourne maintenant un objet AIMessage
+        response_message = rag_chain.invoke({
             "question": last_user_message,
             "history": history_str
         })
         
-        response_content = response.content if hasattr(response, 'content') else str(response)
+        # Extraire le contenu de l'objet AIMessage de manière robuste
+        response_content = response_message.content
 
         # --- Log conversation to Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":

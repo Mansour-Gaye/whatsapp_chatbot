@@ -13,6 +13,7 @@ from langchain_community.cache import SQLiteCache
 import langchain
 from langchain_core.runnables import RunnableMap
 from langchain_community.cache import InMemoryCache
+import re
 from datetime import datetime 
 from langchain_core.documents import Document
 import json
@@ -151,7 +152,7 @@ def save_lead_to_sqlite(lead: Lead, db_path=None):
     """Fonction de compatibilité qui utilise save_lead."""
     return save_lead(lead)
 
-llm = ChatGroq(model="gemma2-9b-it", temperature=0, groq_api_key=os.getenv("GROQ_API_KEY") or "...")
+llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0, groq_api_key=os.getenv("GROQ_API_KEY"))
 logger.info(f"LLM initialisé: {llm is not None}")
 
 structured_llm = llm.with_structured_output(Lead) if llm else None
@@ -210,44 +211,33 @@ def setup_rag():
 
         # Créer le prompt template
         prompt = ChatPromptTemplate.from_template(
-            "### 🎓 Rôle ###\n"
-            "Vous êtes un **assistant virtuel expert de TRANSLAB INTERNATIONAL**, une société de référence basée à Dakar dans les services d'interprétation et de traduction professionnelle. "
-            "Votre mission est de répondre de manière **claire, professionnelle et engageante** aux questions des visiteurs, via WhatsApp.\n\n"
-
-            "### 📚 Contexte Documentaire (si disponible) ###\n"
+            "### Rôle et Objectif\n"
+            "Tu es un assistant virtuel expert pour TRANSLAB INTERNATIONAL. Ta mission est de répondre de manière claire, professionnelle et engageante.\n\n"
+            "### Contexte\n"
             "{context}\n\n"
-
-            "### 🖼️ Images Disponibles (Optionnel) ###\n"
-            "Si la question de l'utilisateur le justifie (par exemple, s'il demande une photo ou une illustration), tu peux inclure UNE SEULE image dans ta réponse en utilisant la balise `[image: nom_du_fichier.ext]`. "
-            "Tu ne dois **jamais** inventer un nom de fichier. Voici la liste **exhaustive** des images que tu peux utiliser : {available_images}\n\n"
-
-            "### 💬 Historique de Conversation (si disponible) ###\n"
+            "### Images Disponibles\n"
+            "{available_images}\n\n"
+            "### Historique de la Conversation\n"
             "{history}\n\n"
-
-            "### ❓ Question de l'utilisateur ###\n"
+            "### Question de l'Utilisateur\n"
             "{question}\n\n"
-
-            "### 🧠 Instructions Additionnelles ###\n"
-            "- Utilise le **Markdown** pour mettre en valeur les mots importants (**gras**, *italique*, listes).\n"
-            "- Structure tes réponses avec des sauts de ligne (`\\n\\n`) pour l'aération.\n"
-            "- Ajoute des **emojis** pertinents (c'est important) pour rendre la réponse plus chaleureuse et lisible (ex : ✅, 📞, ✉️, 🌍, 👋, etc.).\n"
-            "- Exemple :\n"
-            "Bonjour **Jean Dupont** 👋 !\n\n"
-            "Voici les informations demandées :\n"
-            "- **Email** ✉️ : jean.dupont@example.com\n"
-            "- **Téléphone** 📞 : 0123456789\n"
-            "\n"
-            "N'hésite pas à demander autre chose ! 😊\n"
-            "- Si la question est une salutation ou de nature légère, répondez de manière chaleureuse sans invoquer le contexte documentaire.\n"
-            "- Si la question concerne les services linguistiques, les langues, les devis, ou l'expertise de TRANSLAB INTERNATIONAL, appuyez-vous sur le contexte documentaire.\n"
-            "- N'explicitez **jamais** que vous utilisez un document ou un historique.\n"
-            "- Adoptez un **ton professionnel, fluide, rassurant et humain**.\n"
-            "- Utilisez des **puces ou émojis** pour structurer vos réponses quand cela améliore la lisibilité.\n"
-            "- En cas d'ambiguïté, proposez une réponse plausible et orientez poliment vers un contact direct.\n"
-            "- Si vous ne disposez pas de l'information demandée, dites-le avec tact et proposez un autre moyen de contact.\n"
-            "- **NE PAS** proposer de fonctionnalités ou services qui ne sont pas présents dans le contexte documentaire.\n"
-            "- Répondez toujours en **FRANÇAIS**, avec une orthographe irréprochable."
-            
+            "### Instructions\n"
+            "1.  **Analyse la question de l'utilisateur.**\n"
+            "    -   Si c'est une simple salutation (comme 'bonjour', 'salut'), réponds de manière courte et amicale (2-3 lignes max) SANS utiliser d'image.\n"
+            "    -   Si la question concerne nos services, notre travail ou demande une illustration, tu DOIS inclure une image pertinente dans ta réponse.\n\n"
+            "2.  **Pour inclure une image :**\n"
+            "    -   Tu DOIS choisir un nom de fichier EXACTEMENT depuis la liste des \"Images Disponibles\". Ne jamais inventer un nom de fichier.\n"
+            "    -   Ta réponse DOIT commencer par la balise `[image: nom_du_fichier.ext]`.\n\n"
+            "3.  **Format de la réponse :**\n"
+            "    -   Utilise le Markdown pour le style (gras, listes).\n"
+            "    -   Utilise des emojis pour un ton chaleureux.\n"
+            "    -   Ne mentionne JAMAIS que tu utilises des documents ou un contexte.\n\n"
+            "### Exemple de réponse pour \"vos services\"\n"
+            "[image: service1.jpeg]\n"
+            "Absolument ! Nous proposons une gamme complète de services linguistiques :\n"
+            "- **Traduction de documents** 📄\n"
+            "- **Services audiovisuels** 🎬\n"
+            "- **Interprétation** 🗣️"
         )
 
         logger.info("Template de prompt créé")
@@ -299,6 +289,26 @@ if __name__ == "__main__":
         else:
             print("structured_llm is None, skipping lead extraction test.")
     except Exception as e: print(f"Error collecting lead: '{e}'")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

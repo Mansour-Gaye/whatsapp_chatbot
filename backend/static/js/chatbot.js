@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         header: {
             title: 'Assistant IA',
-            botAvatar: '/static/img/avatar.png'
+            botAvatar: '/static/img/cultural-nuance.png'
         },
         welcomeMessage: 'Bonjour ! Comment puis-je vous aider aujourd\'hui ?',
         initialQuickReplies: ['Info produit', 'Support technique', 'Autre question']
@@ -218,8 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
             imageMatches.forEach(tag => {
                 const imageName = tag.replace(imageRegex, '$1').trim();
                 const img = document.createElement('img');
-                // Utiliser un chemin relatif depuis la racine du projet pour plus de robustesse
-                img.src = `backend/static/public/${imageName}`;
+                // Le chemin doit être relatif à la racine du serveur web, qui sert le dossier 'static'
+                img.src = `/static/public/${imageName}`;
                 img.alt = imageName;
                 img.style.maxWidth = '100%';
                 img.style.borderRadius = '12px';
@@ -234,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const messageContent = document.createElement('div');
             messageContent.classList.add('message-content');
             if (sender === 'bot') {
-                console.log("Bot message (raw):", text);
                 messageContent.innerHTML = DOMPurify.sanitize(marked.parse(text));
             } else {
                 messageContent.textContent = text;
