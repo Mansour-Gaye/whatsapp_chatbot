@@ -514,28 +514,37 @@ function toggleChatbox(forceState) {
 
         try {
             if (leadStep === 1) {
-                const response = await fetch('/api/lead', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        input: userMessage,
-                        current_lead: window.leadData,
-                        visitorId: visitorId // Inclure le visitorId
-                    })
-                });
-                const data = await response.json();
-                if (data.status === "success") {
-                    window.leadData = data.lead;
+                const refusal_keywords = ['non', 'no', 'pas maintenant', 'non merci', 'je ne veux pas'];
+                const isRefusal = refusal_keywords.some(keyword => userMessage.toLowerCase().includes(keyword));
 
-                    if (data.complete && leadStep === 1) { // Only show summary once on completion
-                        displayLeadSummary(data.lead);
-                    } else {
-                        addMessage(data.message || "Merci pour ces informations !", 'bot');
-                    }
-
-                    leadStep = 2; // Toujours passer à l'étape 2 pour ne pas redemander en boucle
+                if (isRefusal) {
+                    addMessage("Pas de problème ! Continuons.", 'bot');
+                    leadStep = 2; // Passer à l'étape de chat normal
+                    // Pas besoin de 'return' ici, le 'else' suivant gère le flux
                 } else {
-                    throw new Error(data.message || "Erreur serveur");
+                    const response = await fetch('/api/lead', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            input: userMessage,
+                            current_lead: window.leadData,
+                            visitorId: visitorId // Inclure le visitorId
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.status === "success") {
+                        window.leadData = data.lead;
+
+                        if (data.complete && leadStep === 1) { // Only show summary once on completion
+                            displayLeadSummary(data.lead);
+                        } else {
+                            addMessage(data.message || "Merci pour ces informations !", 'bot');
+                        }
+
+                        leadStep = 2; // Toujours passer à l'étape 2 pour ne pas redemander en boucle
+                    } else {
+                        throw new Error(data.message || "Erreur serveur");
+                    }
                 }
             } else { // Handles leadStep 0 and 2
                 const history = chatHistory.map(msg => ({
