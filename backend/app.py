@@ -179,40 +179,31 @@ def visitor_lookup():
         lead_data = None
         history = []
 
-        # Récupérer les informations du lead
-        lead_response = supabase_client.table("leads").select("*").eq("visitor_id", visitor_id).single().execute()
+        # Récupérer les informations du lead (manière robuste)
+        lead_response = supabase_client.table("leads").select("*").eq("visitor_id", visitor_id).execute()
         if lead_response.data:
-            lead_data = lead_response.data
+            lead_data = lead_response.data[0] # Prendre le premier résultat
 
         # Récupérer l'historique de la conversation
         history_response = supabase_client.table("conversations").select("role, content, created_at").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
         if history_response.data:
             # Formatter l'historique pour le frontend
             for item in history_response.data:
-                # Le frontend attend 'sender' et 'text'
                 history.append({
                     "sender": item['role'],
                     "text": item['content'],
                     "timestamp": item['created_at']
                 })
 
-
         return jsonify({
             "status": "success",
-            "lead": lead_data,
-            "history": history
+            "lead": lead_data, # Sera None si non trouvé
+            "history": history # Sera une liste vide si non trouvée
         })
 
     except Exception as e:
-        # Gérer le cas où .single() ne trouve rien (lance une exception)
-        if "PostgrestError" in str(e) and "0 rows" in str(e):
-             return jsonify({
-                "status": "success",
-                "lead": None,
-                "history": []
-            })
-        print(f"[API_LOOKUP] Erreur dans /api/visitor/lookup: {str(e)}")
-        return jsonify({"status": "error", "message": f"Une erreur interne est survenue: {str(e)}"}), 500
+        print(f"[API_LOOKUP] Erreur inattendue dans /api/visitor/lookup: {str(e)}")
+        return jsonify({"status": "error", "message": f"Une erreur interne inattendue est survenue: {str(e)}"}), 500
 
 
 @app.route("/health")

@@ -67,7 +67,7 @@ def process_message(message_body: str, phone_number: str) -> str:
         else: # current_rag_chain is available
             try:
                 print("[PROCESS_MESSAGE] current_rag_chain found (step 0). Attempting RAG invoke.")
-                response_obj = current_rag_chain.invoke({"history": history, "question": message_body, "company_name": "TRANSLAB INTERNATIONAL", "company_specialty": "Interprétation et Traduction"})
+                response_obj = current_rag_chain.invoke({"history": history, "question": message_body})
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error RAG chain (step 0): '{e}'") 
@@ -128,7 +128,7 @@ def process_message(message_body: str, phone_number: str) -> str:
         else: # current_rag_chain is available
             try:
                 print(f"[PROCESS_MESSAGE] current_rag_chain found (step {current_step}). RAG invoke.")
-                response_obj = current_rag_chain.invoke({"history": history, "question": message_body, "company_name": "TRANSLAB INTERNATIONAL", "company_specialty": "Interprétation et Traduction"})
+                response_obj = current_rag_chain.invoke({"history": history, "question": message_body})
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error RAG chain (step {current_step}): '{e}'") 

@@ -55,7 +55,7 @@ Dans votre page parente (celle qui contient l'iframe), définissez un objet glob
         },
         header: {
             title: 'Support Technique',
-            botAvatar: '/static/img/professional-booth.png' // Chemin relatif au serveur Flask
+            botAvatar: '/static/img/avatar.png' // Chemin relatif au serveur Flask
         },
         welcomeMessage: 'Bonjour, je suis votre assistant technique. Comment puis-je aider ?',
         initialQuickReplies: ['Ouvrir un ticket', 'Documentation', 'Statut du service']
