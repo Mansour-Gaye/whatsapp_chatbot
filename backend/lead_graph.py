@@ -187,119 +187,93 @@ def load_documents():
         logger.error(traceback.format_exc())
         return []
 
-def setup_rag():
-    """Initialise la chaîne RAG avec les documents de Google Drive."""
+def create_rag_chain(image_families: Dict[str, List[str]] = None):
+    """Crée la chaîne RAG avec les documents de Google Drive et les familles d'images."""
+    if image_families is None:
+        image_families = {}
+
     try:
-        # Initialiser le loader Google Drive
         loader = DriveLoader()
-        
-        # Charger les documents
         documents = loader.load()
-        
         if not documents:
             logger.warning("Aucun document trouvé dans Google Drive")
             return None
             
-        # Utiliser Jina Embeddings
         embeddings = JinaEmbeddings()
-        logger.info("Jina Embeddings chargés")
-
-        # Diviser les documents en chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(documents)
-        logger.info(f"Documents divisés en {len(splits)} chunks.")
-
-        # Créer le vectorstore à partir des chunks
         vectorstore = FAISS.from_documents(splits, embeddings)
-        logger.info("Vectorstore FAISS créé à partir des chunks.")
-        
-        # Créer le retriever
         retriever = vectorstore.as_retriever(
-            search_kwargs={
-                "k": 1 if len(documents) == 1 else 2,
-                "score_threshold": 0.8
-            }
+            search_kwargs={"k": 1 if len(documents) == 1 else 2, "score_threshold": 0.8}
         )
-        logger.info("Retriever créé")
 
-        # Créer le prompt template
-        system_prompt = """# 
-Tu es un assistant virtuel représentant **Translab International**, spécialisé dans la traduction, l’interprétation et la localisation. 
-Ton rôle est de répondre aux utilisateurs de manière professionnelle, chaleureuse et concise (80% du temps en 1 à 3 phrases).
+        # Nous passons les familles de carrousels au prompt.
+        available_carousels_str = ", ".join(image_families.keys()) if image_families else "Aucun"
 
-Contexte : {context}  
-Historique : {history}  
-Question de l’utilisateur : {question}  
-Images disponibles : {available_images}  
+        system_prompt = f"""# Rôle et Objectif
+Tu es un assistant virtuel expert pour **Translab International**, une entreprise leader en traduction, interprétation et localisation basée à Dakar. Ton but est de répondre aux questions des utilisateurs de manière professionnelle, chaleureuse, et extrêmement concise, tout en utilisant les outils à ta disposition pour enrichir l'interaction.
 
-### Instructions :
-1. **Toujours être concis** : réponses courtes (1–3 phrases) sauf si une explication détaillée est nécessaire.  
-2. **Images** : insérer une image pertinente (dans {available_images}) au moins tous les 5 messages. (ne salut pas l'utilisateur avec une image).  
-3. **Services** : si la question concerne nos services, répondre clairement (ex: traduction certifiée, interprétation simultanée, localisation).  
-4. **Devis** : si l’utilisateur demande un devis ou des prix → toujours l’orienter vers **contact@translab-international.com**.  
-5. **Coordonnées** : si l’utilisateur demande "comment vous contacter" → fournir Tel, WhatsApp et Email.  
-6. **Ton** : professionnel, chaleureux, avec emojis si pertinent (ex: 🙂, 🌍, 📞).  
-7. **Toujours basé sur le contexte** : utiliser {context} pour fournir des réponses fiables et pertinentes.
+### Outils Spéciaux
+Tu peux intégrer des images ou des carrousels d'images dans tes réponses en utilisant des balises spécifiques.
 
-### Exemples
+1.  **Image simple `[image: ...]`**:
+    *   **Quand l'utiliser** : Pour illustrer un point précis ou après plusieurs échanges textuels pour dynamiser la conversation.
+    *   **Images disponibles** : `{", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune"}`
+    *   **Format** : `[image: nom_du_fichier.jpeg]`
 
-**1️⃣ Questions à réponse courte**  
-Q : "Bonjour, qui êtes-vous ?"  
-R : Bonjour 🙂 Nous sommes **Translab International**, experts en traduction et interprétation à Dakar.  
+2.  **Carrousel d'images `[carousel: ...]`**:
+    *   **Quand l'utiliser** : Exclusivement lorsque l'utilisateur demande à voir des exemples concrets de matériel, d'installations ou de réalisations (ex: "montrez-moi vos cabines", "je veux voir des photos de vos interprètes", "quels sont vos équipements ?").
+    *   **Carrousels disponibles** : `{available_carousels_str}`
+    *   **Format** : `[carousel: nom_de_la_famille]`
+    *   **Exemple de conversation** :
+        *   Utilisateur: "Avez-vous des photos de vos cabines d'interprétation ?"
+        *   Ta réponse: "Absolument ! Voici un aperçu de nos cabines professionnelles. [carousel: interpretation-cabine]"
 
-Q : "Travaillez-vous uniquement au Sénégal ?"  
-R : Non 🌍 Nous accompagnons aussi des clients internationaux.  
+### Instructions de Communication
+- **Concisión Maximale**: Tes réponses doivent faire 1 à 3 phrases dans 80% des cas. Sois direct et va à l'essentiel.
+- **Services et Devis**: Si on te questionne sur les services, réponds clairement. Pour toute demande de devis, de prix ou de tarif, redirige systématiquement vers **contact@translab-international.com**.
+- **Ton**: Adopte un ton professionnel mais chaleureux. Utilise des emojis (🙂, 🌍, 📞) avec parcimonie et pertinence.
+- **Fiabilité**: Base TOUTES tes réponses sur le **Contexte** fourni. Ne fournis jamais d'informations qui ne proviennent pas de ce contexte.
 
-Q : "Faites-vous des traductions certifiées ?"  
-R : ✅ Oui, pour contrats, diplômes et documents officiels.  
+---
+**Contexte de la conversation (source de vérité)**:
+{{context}}
+---
+"""
 
-**2️⃣ Question à réponse avec image**  
-Q : "Quels services proposez-vous ?"  
-R :  
-[image: service1.jpeg]  
-### 🌟 Nos Services  
-- Traduction certifiée  
-- Interprétation simultanée, consécutive et distancielle  
-- Localisation de contenus  
-
-**3️⃣ Question à réponse longue/détaillée**  
-Q : "Pouvez-vous expliquer votre service d’interprétation simultanée ?"  
-R : L’interprétation simultanée consiste à traduire oralement en temps réel lors de conférences ou réunions internationales. Nos interprètes expérimentés utilisent des cabines et des équipements professionnels pour garantir une qualité optimale. Nous offrons également la possibilité de sessions distancielles via Zoom ou Teams. Ce service permet aux participants de comprendre immédiatement les interventions, même dans plusieurs langues, et assure une communication fluide et efficace lors d’événements multilingues. """
-
+        # Mettre à jour le prompt template pour utiliser le nouveau system_prompt formaté
+        # et retirer les variables qui sont maintenant directement dans le f-string.
         prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+            ("system", system_prompt.format(
+                available_images=", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune",
+                available_carousels_str=available_carousels_str
+            )),
             MessagesPlaceholder(variable_name="history"),
             ("human", "{question}"),
         ])
         logger.info("Template de prompt créé")
 
+
         if not llm:
             logger.warning("LLM non disponible, la chaîne RAG ne peut pas être créée.")
             return None
 
-        # Créer la chaîne RAG
+        # La chaîne n'a plus besoin de peupler `available_images` ou `available_carousels`
+        # car ils sont maintenant intégrés dans le system prompt au moment de la création.
         rag_chain = RunnableMap({
             "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
             "question": lambda x: x["question"],
             "history": lambda x: x.get("history", []),
-            "available_images": lambda x: ", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune"
         }) | prompt | llm
         
         logger.info("Chaîne RAG créée avec succès")
         return rag_chain
         
     except Exception as e:
-        logger.error(f"Erreur lors de l'initialisation de la chaîne RAG: {str(e)}")
+        logger.error(f"Erreur lors de la création de la chaîne RAG: {str(e)}")
+        # Afficher le traceback pour un meilleur débogage en développement
+        logger.error(traceback.format_exc())
         return None
-
-# Initialisation du RAG au démarrage
-logger.info("Initialisation de la chaîne RAG...")
-_rag_chain_instance = setup_rag()
-logger.info(f"Chaîne RAG initialisée: {_rag_chain_instance is not None}")
-
-def get_rag_chain():
-    """Retourne l'instance du RAG chain."""
-    return _rag_chain_instance
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")

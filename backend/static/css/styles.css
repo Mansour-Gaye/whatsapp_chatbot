@@ -665,6 +665,75 @@ body {
   left: calc(var(--spacing-unit) * 3);
 }
 
+/* --- Styles pour le Carrousel --- */
+.carousel-container {
+    position: relative;
+    width: 100%;
+    /* La largeur est déterminée par le conteneur .message-bubble */
+    margin-top: 8px;
+    margin-bottom: 4px;
+    overflow: hidden;
+    border-radius: 10px; /* Un peu moins que la bulle de message */
+    -webkit-mask-image: -webkit-radial-gradient(white, black); /* Empêche les images de "dépasser" les coins arrondis */
+}
+
+.carousel-track {
+    display: flex;
+    /* La transition est gérée par JS pour de meilleures performances */
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carousel-item {
+    min-width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.carousel-item img {
+    width: 100%;
+    display: block;
+    height: auto;
+    object-fit: cover;
+    /* Pas de rayon ici, le conteneur s'en charge */
+}
+
+.carousel-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(20, 20, 20, 0.6);
+    color: white;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    z-index: 10;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.carousel-button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-button:active {
+    transform: translateY(-50%) scale(1.0);
+}
+
+.carousel-button.prev {
+    left: 10px;
+}
+
+.carousel-button.next {
+    right: 10px;
+}
+
 /* -------------------- */
 /* CUSTOM CONTRAST FIX  */
 /* -------------------- */
