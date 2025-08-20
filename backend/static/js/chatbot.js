@@ -455,8 +455,8 @@ function toggleChatbox(forceState) {
 
     function applyConfig(config) {
         // Apply theme colors
-        document.documentElement.style.setProperty('--chatbox-primary-color', config.theme.primary);
-        document.documentElement.style.setProperty('--chatbox-user-message-bg-color', config.theme.userMessageBg || config.theme.primary);
+        document.documentElement.style.setProperty('--primary-color', config.theme.primary);
+        document.documentElement.style.setProperty('--user-message-bg', config.theme.userMessageBg || config.theme.primary);
 
         // Apply position
         chatboxContainer.classList.add(config.position || 'bottom-right');

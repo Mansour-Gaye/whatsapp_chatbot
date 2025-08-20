@@ -249,17 +249,22 @@ body {
 
 .user .message-timestamp,
 .user .read-receipt {
-  color: var(--text-on-primary);
-  opacity: 0.8;
+  color: #ffffff;
+  opacity: 0.9;
 }
 
 .bot .message-timestamp {
-  color: var(--text-secondary);
+  color: #000000;
+}
+
+[data-theme="dark"] .bot .message-timestamp {
+    color: #ffffff;
 }
 
 .read-receipt {
   font-size: 0.7rem;
   margin-left: 4px;
+  animation: seen-pop 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
 }
 
 /* Typing Indicator */
@@ -587,6 +592,21 @@ body {
     100% { left: 100%; width: 100%; }
 }
 
+@keyframes seen-pop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    70% {
+        transform: scale(1.1);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .chatbox-container {
@@ -659,12 +679,6 @@ body {
   text-decoration: underline;
 }
 
-/* Make timestamp fully opaque for max readability */
-.message-bubble.user .message-timestamp {
-  color: #ffffff;
-  opacity: 1;
-}
-
 
 /* --- Bot Message Bubble (Light/Dark Background) --- */
 
@@ -672,12 +686,6 @@ body {
 [data-theme="dark"] .message-bubble.bot .message-content a {
   color: var(--secondary-color); /* Use the lighter blue from dark theme vars */
   font-weight: 600;
-}
-
-/* Improve timestamp contrast on dark bot bubbles */
-[data-theme="dark"] .message-bubble.bot .message-timestamp {
-  color: var(--text-secondary); /* Uses a lighter gray from dark theme vars */
-  opacity: 0.9;
 }
 
 #chat-launcher.bottom-left {
