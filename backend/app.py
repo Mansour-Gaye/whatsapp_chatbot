@@ -4,6 +4,7 @@ from supabase import create_client, Client
 from flask_cors import CORS
 import csv
 import io
+import re
 from datetime import datetime, timedelta
 
 from whatsapp_webhook import whatsapp
@@ -87,6 +88,16 @@ def chat():
         
         # Extraire le contenu de l'objet AIMessage de manière robuste
         response_content = response_message.content
+
+        # --- Début du Guardrail pour le formatage de l'image ---
+        # Liste des noms d'images connus qui peuvent apparaître au début
+        image_filenames = ["service1.jpeg", "cultural-nuance.png", "engaged-audience-dakar.png"]
+        for filename in image_filenames:
+            if response_content.strip().startswith(filename):
+                # Reformater la réponse pour inclure le tag [image:...]
+                response_content = f"[image: {filename}]\n\n" + response_content.strip()[len(filename):].strip()
+                break # Arrêter après avoir trouvé une correspondance
+        # --- Fin du Guardrail ---
 
         # --- Log conversation to Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":

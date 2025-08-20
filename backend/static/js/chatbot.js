@@ -311,27 +311,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    async function sendToBackend(history) {
+    async function sendToBackend() {
+        const historyPayload = chatHistory.map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+        }));
+
+        console.log("Sending to backend. History payload:", JSON.stringify(historyPayload, null, 2));
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history, visitorId: visitorId }) // Inclure le visitorId
+                body: JSON.stringify({ history: historyPayload, visitorId: visitorId })
             });
             if (!response.ok) {
-                // Try to get more details from the response body
-                const errorData = await response.json().catch(() => null); // Gracefully handle non-JSON responses
+                const errorData = await response.json().catch(() => null);
                 const errorMessage = errorData ? errorData.response : `HTTP error! status: ${response.status}`;
                 console.error("Backend error:", errorMessage);
                 return `Je rencontre un souci technique. ${errorMessage}`;
             }
             const data = await response.json();
-            if (data.status === "success") {
-                return data.response;
-            } else {
-                 // The backend now sends a meaningful error in 'response'
-                return data.response || "Une erreur inattendue est survenue.";
-            }
+            return data.status === "success" ? data.response : (data.response || "Une erreur inattendue est survenue.");
         } catch (e) {
             console.error("Network or fetch error:", e);
             return "Erreur de connexion au serveur.";
@@ -547,11 +547,7 @@ function toggleChatbox(forceState) {
                     }
                 }
             } else { // Handles leadStep 0 and 2
-                const history = chatHistory.map(msg => ({
-                    role: msg.sender === 'user' ? 'user' : 'assistant',
-                    content: msg.text
-                }));
-                const botReply = await sendToBackend(history);
+                const botReply = await sendToBackend();
                 addMessage(botReply, 'bot');
 
                 if (leadStep === 0) {
