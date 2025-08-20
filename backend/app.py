@@ -60,11 +60,11 @@ def log_requests(f):
 @log_requests
 def chat():
     data = request.get_json()
-    history = data.get("history", [])
+    client_history = data.get("history", []) # Renommé pour éviter la confusion
     visitor_id = data.get("visitorId", "unknown_visitor")
 
-    if not history:
-        return jsonify({"status": "error", "response": "L'historique de conversation est vide"}), 400
+    if not client_history:
+        return jsonify({"status": "error", "response": "L'historique de conversation du client est vide"}), 400
 
     try:
         rag_chain = get_rag_chain()
@@ -72,37 +72,48 @@ def chat():
             print("[API_CHAT] CRITICAL: RAG chain is not available.")
             raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
 
-        last_user_message = history[-1]["content"]
-        
-        formatted_history = []
-        for msg in history[:-1]:
-            role = "Utilisateur" if msg.get("role") == "user" else "Assistant"
-            formatted_history.append(f"{role}: {msg.get('content')}")
-        history_str = "\n".join(formatted_history)
+        langchain_history = []
+        # --- Récupération de l'historique depuis Supabase ---
+        if supabase_client and visitor_id != "unknown_visitor":
+            try:
+                # Récupérer l'historique depuis Supabase
+                history_response = supabase_client.table("conversations").select("role, content").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
 
-        # La chaîne RAG retourne maintenant un objet AIMessage
+                if history_response.data:
+                    for item in history_response.data:
+                        if item.get("role") == "user":
+                            langchain_history.append(HumanMessage(content=item.get("content")))
+                        elif item.get("role") in ["assistant", "bot"]:
+                            langchain_history.append(AIMessage(content=item.get("content")))
+                    print(f"[API_CHAT] Successfully fetched {len(langchain_history)} messages from Supabase for {visitor_id}.")
+            except Exception as e_fetch:
+                print(f"[API_CHAT] ERROR fetching history from Supabase for {visitor_id}: {e_fetch}")
+                # Continuer sans l'historique côté serveur en cas d'échec
+
+        # La dernière entrée de l'historique client est la question actuelle
+        last_user_message = client_history[-1]["content"]
+
+        # Invoquer la chaîne RAG avec l'historique structuré de Supabase
         response_message = rag_chain.invoke({
             "question": last_user_message,
-            "history": history_str
+            "history": langchain_history # Ceci vient maintenant de Supabase
         })
         
-        # Extraire le contenu de l'objet AIMessage de manière robuste
         response_content = response_message.content
 
         # --- Début du Guardrail pour le formatage de l'image ---
-        # Liste des noms d'images connus qui peuvent apparaître au début
+        # Cette partie peut être retirée si le modèle est censé le formater correctement maintenant
+        # Je vais le garder pour l'instant comme mesure de sécurité.
         image_filenames = ["service1.jpeg", "cultural-nuance.png", "engaged-audience-dakar.png"]
         for filename in image_filenames:
             if response_content.strip().startswith(filename):
-                # Reformater la réponse pour inclure le tag [image:...]
                 response_content = f"[image: {filename}]\n\n" + response_content.strip()[len(filename):].strip()
-                break # Arrêter après avoir trouvé une correspondance
+                break
         # --- Fin du Guardrail ---
 
         # --- Log conversation to Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
             try:
-                # Log du dernier message utilisateur
                 user_message_to_log = {
                     "visitor_id": visitor_id,
                     "role": "user",
@@ -110,7 +121,6 @@ def chat():
                 }
                 supabase_client.table("conversations").insert(user_message_to_log).execute()
 
-                # Log de la réponse de l'assistant
                 assistant_response_data = {
                     "visitor_id": visitor_id,
                     "role": "assistant",
@@ -127,6 +137,9 @@ def chat():
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
+        # Ajout du traceback pour un meilleur débogage
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "response": f"Une erreur interne est survenue: {str(e)}"}), 500
 
 @app.route("/api/lead", methods=["POST"])

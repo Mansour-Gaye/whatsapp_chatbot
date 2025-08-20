@@ -7,7 +7,8 @@ import traceback
 
 try:
     from lead_graph import Lead, structured_llm, get_rag_chain, llm as base_llm_from_graph
-    from lead_graph import save_lead_to_csv, save_lead_to_sqlite 
+    from lead_graph import save_lead_to_csv, save_lead_to_sqlite
+    from langchain_core.messages import HumanMessage, AIMessage
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = True
     print("[WHATSAPP_WEBHOOK_INIT] Successfully imported components from lead_graph.")
 except ImportError as e:
@@ -15,6 +16,7 @@ except ImportError as e:
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = False
     Lead, structured_llm, get_rag_chain, base_llm_from_graph = None, None, None, None
     save_lead_to_csv, save_lead_to_sqlite = None, None
+    HumanMessage, AIMessage = None, None
 
 load_dotenv()
 whatsapp = Blueprint('whatsapp', __name__)
@@ -67,7 +69,16 @@ def process_message(message_body: str, phone_number: str) -> str:
         else: # current_rag_chain is available
             try:
                 print("[PROCESS_MESSAGE] current_rag_chain found (step 0). Attempting RAG invoke.")
-                response_obj = current_rag_chain.invoke({"history": history, "question": message_body})
+                # Convertir l'historique de dicts en une liste d'objets Message
+                langchain_history = []
+                # L'historique ici inclut le message actuel de l'utilisateur, donc nous prenons tout sauf le dernier.
+                for msg in history[:-1]:
+                    if msg.get("role") == "user":
+                        langchain_history.append(HumanMessage(content=msg.get("content")))
+                    elif msg.get("role") == "assistant":
+                        langchain_history.append(AIMessage(content=msg.get("content")))
+
+                response_obj = current_rag_chain.invoke({"history": langchain_history, "question": message_body})
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error RAG chain (step 0): '{e}'") 
@@ -128,7 +139,16 @@ def process_message(message_body: str, phone_number: str) -> str:
         else: # current_rag_chain is available
             try:
                 print(f"[PROCESS_MESSAGE] current_rag_chain found (step {current_step}). RAG invoke.")
-                response_obj = current_rag_chain.invoke({"history": history, "question": message_body})
+                # Convertir l'historique de dicts en une liste d'objets Message
+                langchain_history = []
+                # L'historique ici inclut le message actuel de l'utilisateur, donc nous prenons tout sauf le dernier.
+                for msg in history[:-1]:
+                    if msg.get("role") == "user":
+                        langchain_history.append(HumanMessage(content=msg.get("content")))
+                    elif msg.get("role") == "assistant":
+                        langchain_history.append(AIMessage(content=msg.get("content")))
+
+                response_obj = current_rag_chain.invoke({"history": langchain_history, "question": message_body})
                 response_text = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
             except Exception as e:
                 print(f"[PROCESS_MESSAGE] Error RAG chain (step {current_step}): '{e}'") 

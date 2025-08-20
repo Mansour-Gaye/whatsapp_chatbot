@@ -8,7 +8,7 @@ import io
 from gdrive_utils import get_drive_service, DriveLoader
 from langchain_community.vectorstores import FAISS
 from jina_embeddings import JinaEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.cache import SQLiteCache
 import langchain
@@ -223,63 +223,23 @@ def setup_rag():
         logger.info("Retriever créé")
 
         # Créer le prompt template
-        prompt = ChatPromptTemplate.from_template("""
-# Rôle et Objectif
-Tu es Marcus Linguist, un assistant IA expert pour TRANSLAB INTERNATIONAL, société de services linguistiques à Dakar.
+        system_prompt = """# Rôle et Objectif
+Tu es Marcus Linguist, un assistant IA expert pour TRANSLAB INTERNATIONAL, une société de services linguistiques basée à Dakar. Ton but est de répondre aux questions de manière claire, professionnelle et utile.
 
-### 🎯 Objectif :
-Répondre aux questions des utilisateurs de manière claire, professionnelle et utile, en utilisant les informations disponibles.
+### Instructions
+- **Sois amical et engageant** : Utilise des émojis pertinents pour rendre la conversation agréable.
+- **Utilise le contexte fourni** : Base tes réponses sur les informations extraites des documents de l'entreprise.
+- **Réponds en Markdown** : Structure tes réponses pour une meilleure lisibilité (listes, gras, etc.).
+- **Gère les images** : Si une image est pertinente, inclus-la en utilisant le format `[image: nom_du_fichier.jpeg]`.
+- **Sois concis** : Va droit au but, ne te répète pas et n'explique pas que tu es une IA.
+- **Récupération d'informations (Contexte)** : `{context}`.
+- **Images disponibles** : `{available_images}`."""
 
----
-### ✅ Instructions principales :
-
-- Identifier l’intention de l’utilisateur : salutation, question sur les services, demande de coordonnées, question informelle, etc.
-- Répondre clairement et professionnellement, avec un ton amical et des émojis si pertinent.
-- Inclure des images uniquement si elles sont pertinentes et disponibles dans {available_images}.
-- Ne jamais répéter les salutations déjà données.
-- Ne jamais expliquer votre processus de réflexion.
-- Formater les réponses en Markdown.
-- Si l’utilisateur fournit des informations de contact, mémorisez-les pour la base de leads.
-- Ne commence jamais tes reponses par "Ma reponse :"
-- Utilise de sdivers emojis pour rendre les réponses plus engageantes et amicales.
----
-
-### 📝 Contexte de la requête :
-
-- Informations de l'entreprise : {context}
-- Images disponibles : {available_images}
-- Historique de la conversation : {history}
-- Dernière question de l’utilisateur : {question}
-
----
-
-###  Exemples :
-Q : "Quels sont vos services ?"  
-R :  
-[image: service1.jpeg]  
-### 🌟 Nos Services Linguistiques
-- **Interprétation** : Simultanée, Consécutive, Liaison, Distanciel  
-- **Traduction certifiée** : Juridique, Médicale, Technique  
-- **Localisation** : Adaptation de contenus pour la culture locale  
-> Nos 15+ années d’expertise garantissent un service de qualité ISO 2603.  
-💡 Souhaitez-vous un devis personnalisé ?
----
-Q : "Ça va ?"  
-R :  
-**Je vais très bien, merci de demander ! 😊**  
-En quoi puis-je vous être utile aujourd’hui ?  
-💬 N’hésitez pas à poser vos questions sur nos services ou à demander un devis.
---- 
-Q : "Comment puis-je vous contacter ?"  
-R :  
-### 📞 Contactez-nous
-- **Téléphone** : +221 77 509 04 01  
-- **WhatsApp** : +221 78 148 10 10  
-- **Email** : contact@translab-international.com  
-- **Adresse** : Dakar, Sénégal  
-> Nous sommes disponibles du Lundi au Vendredi, 9h-18h30, et le Samedi, 9h-12h.
-""")
-
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{question}"),
+        ])
         logger.info("Template de prompt créé")
 
         if not llm:
@@ -312,27 +272,51 @@ def get_rag_chain():
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")
+    from langchain_core.messages import AIMessage, HumanMessage
     if not os.getenv("GROQ_API_KEY"): print("Warning: GROQ_API_KEY not set.")
-    
+
     print("\n--- RAG Chain Test ---")
     test_rag_chain = get_rag_chain()
     if test_rag_chain:
         print("RAG chain obtained via get_rag_chain().")
         try:
-            response = test_rag_chain.invoke({"question": "Quels sont vos services ?"})
-            print(f"Test RAG Response: '{response.content if hasattr(response, 'content') else response}'")
-        except Exception as e: print(f"Error invoking test RAG chain: '{e}'")
-    else: print("RAG chain is None after get_rag_chain(). Skipping RAG test.")
-    
+            # Test 1: First question
+            print("\n--- Test 1: First Question ---")
+            response1 = test_rag_chain.invoke({
+                "question": "Quels sont vos services ?",
+                "history": []
+            })
+            print(f"Test RAG Response 1: '{response1.content}'")
+
+            # Test 2: Follow-up question
+            print("\n--- Test 2: Follow-up Question ---")
+            response2 = test_rag_chain.invoke({
+                "question": "Et pour la traduction ?",
+                "history": [
+                    HumanMessage(content="Quels sont vos services ?"),
+                    AIMessage(content=response1.content)
+                ]
+            })
+            print(f"Test RAG Response 2: '{response2.content}'")
+
+        except Exception as e:
+            print(f"Error invoking test RAG chain: '{e}'")
+            # Print traceback for more details
+            import traceback
+            traceback.print_exc()
+    else:
+        print("RAG chain is None after get_rag_chain(). Skipping RAG test.")
+
     print("\n--- Lead Extraction Test ---")
     text = "Bonjour, je suis Jean Dupont. Mon email est jean.dupont@example.com et mon tel est 0123456789."
     try:
         if structured_llm:
-            collected_lead = collect_lead_from_text(text) 
+            collected_lead = collect_lead_from_text(text)
             print(f"Extracted Lead: '{collected_lead}'")
         else:
             print("structured_llm is None, skipping lead extraction test.")
-    except Exception as e: print(f"Error collecting lead: '{e}'")
+    except Exception as e:
+        print(f"Error collecting lead: '{e}'")
 
 
 
