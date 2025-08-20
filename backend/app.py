@@ -72,31 +72,24 @@ def chat():
             print("[API_CHAT] CRITICAL: RAG chain is not available.")
             raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
 
+        # --- Construction de l'historique à partir des données du client ---
+        # L'historique du client inclut le message actuel de l'utilisateur.
+        # Nous construisons l'historique pour LangChain à partir de tous les messages sauf le dernier.
         langchain_history = []
-        # --- Récupération de l'historique depuis Supabase ---
-        if supabase_client and visitor_id != "unknown_visitor":
-            try:
-                # Récupérer l'historique depuis Supabase
-                history_response = supabase_client.table("conversations").select("role, content").eq("visitor_id", visitor_id).order("created_at", desc=False).execute()
-                
-                if history_response.data:
-                    for item in history_response.data:
-                        if item.get("role") == "user":
-                            langchain_history.append(HumanMessage(content=item.get("content")))
-                        elif item.get("role") in ["assistant", "bot"]:
-                            langchain_history.append(AIMessage(content=item.get("content")))
-                    print(f"[API_CHAT] Successfully fetched {len(langchain_history)} messages from Supabase for {visitor_id}.")
-            except Exception as e_fetch:
-                print(f"[API_CHAT] ERROR fetching history from Supabase for {visitor_id}: {e_fetch}")
-                # Continuer sans l'historique côté serveur en cas d'échec
+        for msg in client_history[:-1]:
+            if msg.get("role") == "user":
+                langchain_history.append(HumanMessage(content=msg.get("content")))
+            # Le frontend envoie 'assistant', mais nous vérifions aussi 'bot' pour la robustesse
+            elif msg.get("role") in ["assistant", "bot"]:
+                langchain_history.append(AIMessage(content=msg.get("content")))
 
         # La dernière entrée de l'historique client est la question actuelle
         last_user_message = client_history[-1]["content"]
 
-        # Invoquer la chaîne RAG avec l'historique structuré de Supabase
+        # Invoquer la chaîne RAG avec l'historique fourni par le client
         response_message = rag_chain.invoke({
             "question": last_user_message,
-            "history": langchain_history # Ceci vient maintenant de Supabase
+            "history": langchain_history
         })
         
         response_content = response_message.content

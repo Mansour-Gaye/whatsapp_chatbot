@@ -23,11 +23,11 @@
             border-radius: 4px;
         }
     </style>
-    <link rel="stylesheet" href="backend/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 </head>
-<body style="background-image: url('backend/static/public/hero_site_web_translab.png'); background-size: cover; background-position: center; background-attachment: fixed;">
+<body style="background-image: url('/static/public/hero_site_web_translab.png'); background-size: cover; background-position: center; background-attachment: fixed;">
     <!--
     <h1>Page d'Exemple pour la Chatbox</h1>
     <p>
@@ -52,7 +52,7 @@
             },
             header: {
                 title: 'Mon Assistant Personnalisé',
-                botAvatar: 'backend/static/public/avatar-chatbot.png'
+                botAvatar: '/static/public/avatar-chatbot.png'
             },
             welcomeMessage: 'Bienvenue sur cette page de démo ! Posez-moi une question.',
             initialQuickReplies: ['Montre-moi un produit', 'Quelle est ta couleur ?', 'Aide']
@@ -71,7 +71,7 @@
         <div class="progress-bar"></div>
         <div class="chatbox-header">
             <div class="chatbox-header-avatar">
-                <img src="backend/static/public/avatar-chatbot.png" alt="Bot Avatar" id="bot-avatar">
+                <img src="/static/public/avatar-chatbot.png" alt="Bot Avatar" id="bot-avatar">
             </div>
             <div class="chatbox-header-title">
                 Assistant IA
@@ -103,6 +103,6 @@
         Une question ? Discutez avec notre IA !
     </div>
 
-    <script src="backend/static/js/chatbot.js"></script>
+    <script src="/static/js/chatbot.js"></script>
 </body>
 </html>
