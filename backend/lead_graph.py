@@ -8,7 +8,7 @@ import io
 from gdrive_utils import get_drive_service, DriveLoader
 from langchain_community.vectorstores import FAISS
 from jina_embeddings import JinaEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.cache import SQLiteCache
 import langchain
@@ -223,63 +223,54 @@ def setup_rag():
         logger.info("Retriever créé")
 
         # Créer le prompt template
-        prompt = ChatPromptTemplate.from_template("""
-# Rôle et Objectif
-Tu es Marcus Linguist, un assistant IA expert pour TRANSLAB INTERNATIONAL, société de services linguistiques à Dakar.
+        system_prompt = """# 
+Tu es un assistant virtuel représentant **Translab International**, spécialisé dans la traduction, l’interprétation et la localisation. 
+Ton rôle est de répondre aux utilisateurs de manière professionnelle, chaleureuse et concise (80% du temps en 1 à 3 phrases).
 
-### 🎯 Objectif :
-Répondre aux questions des utilisateurs de manière claire, professionnelle et utile, en utilisant les informations disponibles.
+Contexte : {context}  
+Historique : {history}  
+Question de l’utilisateur : {question}  
+Images disponibles : {available_images}  
 
----
-### ✅ Instructions principales :
+### Instructions :
+1. **Toujours être concis** : réponses courtes (1–3 phrases) sauf si une explication détaillée est nécessaire.  
+2. **Images** : insérer une image pertinente (dans {available_images}) au moins tous les 3–5 messages.  
+3. **Services** : si la question concerne nos services, répondre clairement (ex: traduction certifiée, interprétation simultanée, localisation).  
+4. **Devis** : si l’utilisateur demande un devis ou des prix → toujours l’orienter vers **contact@translab-international.com**.  
+5. **Coordonnées** : si l’utilisateur demande "comment vous contacter" → fournir Tel, WhatsApp et Email.  
+6. **Ton** : professionnel, chaleureux, avec emojis si pertinent (ex: 🙂, 🌍, 📞).  
+7. **Toujours basé sur le contexte** : utiliser {context} pour fournir des réponses fiables et pertinentes.
 
-- Identifier l’intention de l’utilisateur : salutation, question sur les services, demande de coordonnées, question informelle, etc.
-- Répondre clairement et professionnellement, avec un ton amical et des émojis si pertinent.
-- Inclure des images uniquement si elles sont pertinentes et disponibles dans {available_images}.
-- Ne jamais répéter les salutations déjà données.
-- Ne jamais expliquer votre processus de réflexion.
-- Formater les réponses en Markdown.
-- Si l’utilisateur fournit des informations de contact, mémorisez-les pour la base de leads.
-- Ne commence jamais tes reponses par "Ma reponse :"
-- Utilise de sdivers emojis pour rendre les réponses plus engageantes et amicales.
----
+### Exemples
 
-### 📝 Contexte de la requête :
+**1️⃣ Questions à réponse courte**  
+Q : "Bonjour, qui êtes-vous ?"  
+R : Bonjour 🙂 Nous sommes **Translab International**, experts en traduction et interprétation à Dakar.  
 
-- Informations de l'entreprise : {context}
-- Images disponibles : {available_images}
-- Historique de la conversation : {history}
-- Dernière question de l’utilisateur : {question}
+Q : "Travaillez-vous uniquement au Sénégal ?"  
+R : Non 🌍 Nous accompagnons aussi des clients internationaux.  
 
----
+Q : "Faites-vous des traductions certifiées ?"  
+R : ✅ Oui, pour contrats, diplômes et documents officiels.  
 
-###  Exemples :
-Q : "Quels sont vos services ?"  
+**2️⃣ Question à réponse avec image**  
+Q : "Quels services proposez-vous ?"  
 R :  
 [image: service1.jpeg]  
-### 🌟 Nos Services Linguistiques
-- **Interprétation** : Simultanée, Consécutive, Liaison, Distanciel  
-- **Traduction certifiée** : Juridique, Médicale, Technique  
-- **Localisation** : Adaptation de contenus pour la culture locale  
-> Nos 15+ années d’expertise garantissent un service de qualité ISO 2603.  
-💡 Souhaitez-vous un devis personnalisé ?
----
-Q : "Ça va ?"  
-R :  
-**Je vais très bien, merci de demander ! 😊**  
-En quoi puis-je vous être utile aujourd’hui ?  
-💬 N’hésitez pas à poser vos questions sur nos services ou à demander un devis.
---- 
-Q : "Comment puis-je vous contacter ?"  
-R :  
-### 📞 Contactez-nous
-- **Téléphone** : +221 77 509 04 01  
-- **WhatsApp** : +221 78 148 10 10  
-- **Email** : contact@translab-international.com  
-- **Adresse** : Dakar, Sénégal  
-> Nous sommes disponibles du Lundi au Vendredi, 9h-18h30, et le Samedi, 9h-12h.
-""")
+### 🌟 Nos Services  
+- Traduction certifiée  
+- Interprétation simultanée, consécutive et distancielle  
+- Localisation de contenus  
 
+**3️⃣ Question à réponse longue/détaillée**  
+Q : "Pouvez-vous expliquer votre service d’interprétation simultanée ?"  
+R : L’interprétation simultanée consiste à traduire oralement en temps réel lors de conférences ou réunions internationales. Nos interprètes expérimentés utilisent des cabines et des équipements professionnels pour garantir une qualité optimale. Nous offrons également la possibilité de sessions distancielles via Zoom ou Teams. Ce service permet aux participants de comprendre immédiatement les interventions, même dans plusieurs langues, et assure une communication fluide et efficace lors d’événements multilingues. """
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "{question}"),
+        ])
         logger.info("Template de prompt créé")
 
         if not llm:
@@ -312,61 +303,51 @@ def get_rag_chain():
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")
+    from langchain_core.messages import AIMessage, HumanMessage
     if not os.getenv("GROQ_API_KEY"): print("Warning: GROQ_API_KEY not set.")
-    
+
     print("\n--- RAG Chain Test ---")
     test_rag_chain = get_rag_chain()
     if test_rag_chain:
         print("RAG chain obtained via get_rag_chain().")
         try:
-            response = test_rag_chain.invoke({"question": "Quels sont vos services ?"})
-            print(f"Test RAG Response: '{response.content if hasattr(response, 'content') else response}'")
-        except Exception as e: print(f"Error invoking test RAG chain: '{e}'")
-    else: print("RAG chain is None after get_rag_chain(). Skipping RAG test.")
-    
+            # Test 1: First question
+            print("\n--- Test 1: First Question ---")
+            response1 = test_rag_chain.invoke({
+                "question": "Quels sont vos services ?",
+                "history": []
+            })
+            print(f"Test RAG Response 1: '{response1.content}'")
+
+            # Test 2: Follow-up question
+            print("\n--- Test 2: Follow-up Question ---")
+            response2 = test_rag_chain.invoke({
+                "question": "Et pour la traduction ?",
+                "history": [
+                    HumanMessage(content="Quels sont vos services ?"),
+                    AIMessage(content=response1.content)
+                ]
+            })
+            print(f"Test RAG Response 2: '{response2.content}'")
+
+        except Exception as e:
+            print(f"Error invoking test RAG chain: '{e}'")
+            # Print traceback for more details
+            import traceback
+            traceback.print_exc()
+    else:
+        print("RAG chain is None after get_rag_chain(). Skipping RAG test.")
+
     print("\n--- Lead Extraction Test ---")
     text = "Bonjour, je suis Jean Dupont. Mon email est jean.dupont@example.com et mon tel est 0123456789."
     try:
         if structured_llm:
-            collected_lead = collect_lead_from_text(text) 
+            collected_lead = collect_lead_from_text(text)
             print(f"Extracted Lead: '{collected_lead}'")
         else:
             print("structured_llm is None, skipping lead extraction test.")
-    except Exception as e: print(f"Error collecting lead: '{e}'")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    except Exception as e:
+        print(f"Error collecting lead: '{e}'")
 
 
 
