@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 import traceback
 
 try:
-    from lead_graph import Lead, structured_llm, get_rag_chain, llm as base_llm_from_graph
+    # Remplacer get_rag_chain par create_rag_chain
+    from lead_graph import Lead, structured_llm, create_rag_chain, llm as base_llm_from_graph
     from lead_graph import save_lead_to_csv, save_lead_to_sqlite
     from langchain_core.messages import HumanMessage, AIMessage
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = True
@@ -14,7 +15,7 @@ try:
 except ImportError as e:
     print(f"[WHATSAPP_WEBHOOK_INIT] CRITICAL_IMPORT_ERROR: Failed to import from lead_graph: '{e}'. Fallback mode will be active.")
     LEAD_GRAPH_IMPORTED_SUCCESSFULLY = False
-    Lead, structured_llm, get_rag_chain, base_llm_from_graph = None, None, None, None
+    Lead, structured_llm, create_rag_chain, base_llm_from_graph = None, None, None, None
     save_lead_to_csv, save_lead_to_sqlite = None, None
     HumanMessage, AIMessage = None, None
 
@@ -44,13 +45,14 @@ def process_message(message_body: str, phone_number: str) -> str:
     history.append({"role": "user", "content": message_body})
     response_text = "Je rencontre un problème technique. Veuillez réessayer plus tard." 
 
-    if not LEAD_GRAPH_IMPORTED_SUCCESSFULLY or not callable(get_rag_chain): # Also check get_rag_chain
-        print("[PROCESS_MESSAGE] Critical: lead_graph components (incl. get_rag_chain) not imported properly.")
+    if not LEAD_GRAPH_IMPORTED_SUCCESSFULLY or not callable(create_rag_chain):
+        print("[PROCESS_MESSAGE] Critical: lead_graph components (incl. create_rag_chain) not imported properly.")
         history.append({"role": "assistant", "content": response_text})
         return response_text
 
     current_step = state["step"]
-    current_rag_chain = get_rag_chain() # Get RAG chain instance via lazy loader
+    # Créer une instance de la chaîne RAG pour WhatsApp, sans familles d'images pour les carrousels.
+    current_rag_chain = create_rag_chain({})
 
     if current_step == 0:
         state["exchange_count"] += 1

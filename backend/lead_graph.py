@@ -187,84 +187,74 @@ def load_documents():
         logger.error(traceback.format_exc())
         return []
 
-def setup_rag():
-    """Initialise la chaîne RAG avec les documents de Google Drive."""
+def create_rag_chain(image_families: Dict[str, List[str]] = None):
+    """Crée la chaîne RAG avec les documents de Google Drive et les familles d'images."""
+    if image_families is None:
+        image_families = {}
+
     try:
-        # Initialiser le loader Google Drive
         loader = DriveLoader()
-        
-        # Charger les documents
         documents = loader.load()
-        
         if not documents:
             logger.warning("Aucun document trouvé dans Google Drive")
             return None
             
-        # Utiliser Jina Embeddings
         embeddings = JinaEmbeddings()
-        logger.info("Jina Embeddings chargés")
-
-        # Diviser les documents en chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(documents)
-        logger.info(f"Documents divisés en {len(splits)} chunks.")
-
-        # Créer le vectorstore à partir des chunks
         vectorstore = FAISS.from_documents(splits, embeddings)
-        logger.info("Vectorstore FAISS créé à partir des chunks.")
-        
-        # Créer le retriever
         retriever = vectorstore.as_retriever(
-            search_kwargs={
-                "k": 1 if len(documents) == 1 else 2,
-                "score_threshold": 0.8
-            }
+            search_kwargs={"k": 1 if len(documents) == 1 else 2, "score_threshold": 0.8}
         )
-        logger.info("Retriever créé")
 
-        # Créer le prompt template
-        system_prompt = """# 
-Tu es un assistant virtuel représentant **Translab International**, spécialisé dans la traduction, l’interprétation et la localisation. 
-Ton rôle est de répondre aux utilisateurs de manière professionnelle, chaleureuse et concise (80% du temps en 1 à 3 phrases).
+        system_prompt = """# Persona & Directives
+Tu es un assistant virtuel expert, professionnel et chaleureux pour Translab International. Ta mission est de répondre aux questions des utilisateurs de manière concise et pertinente.
+- **Règle Fondamentale**: NE JAMAIS dire que tu es une IA, un programme ou un assistant virtuel. Incarne pleinement ton rôle.
+- **Objectif d'Engagement**: Pour rendre la conversation plus humaine, ton objectif est d'utiliser l'outil `emotion` environ une fois tous les 3 messages, lorsque c'est pertinent.
 
-Contexte : {context}  
-Historique : {history}  
-Question de l’utilisateur : {question}  
-Images disponibles : {available_images}  
+### Outils Disponibles
+Tu as deux outils principaux pour enrichir tes réponses : le carrousel d'images et l'en-tête d'émotion.
 
-### Instructions :
-1. **Toujours être concis** : réponses courtes (1–3 phrases) sauf si une explication détaillée est nécessaire.  
-2. **Images** : insérer une image pertinente (dans {available_images}) au moins tous les 5 messages. (ne salut pas l'utilisateur avec une image).  
-3. **Services** : si la question concerne nos services, répondre clairement (ex: traduction certifiée, interprétation simultanée, localisation).  
-4. **Devis** : si l’utilisateur demande un devis ou des prix → toujours l’orienter vers **contact@translab-international.com**.  
-5. **Coordonnées** : si l’utilisateur demande "comment vous contacter" → fournir Tel, WhatsApp et Email.  
-6. **Ton** : professionnel, chaleureux, avec emojis si pertinent (ex: 🙂, 🌍, 📞).  
-7. **Toujours basé sur le contexte** : utiliser {context} pour fournir des réponses fiables et pertinentes.
+**1. Outil Carrousel `[carousel: ...]`**
+- **Description**: Affiche une galerie d'images interactive que l'utilisateur peut faire défiler.
+- **Règle d'Or**: Si la question de l'utilisateur contient des mots comme "montre", "photos", "images", "exemples de", "à quoi ressemble", et que le sujet correspond à une des familles de carrousels disponibles, tu **dois** utiliser cet outil. C'est ta fonction principale pour les requêtes visuelles.
+- **Carrousels Disponibles**: {available_carousels}
+- **Format**: `[carousel: nom_de_la_famille]`
 
-### Exemples
+**2. Outil Émotion `[emotion: ...]`**
+- **Description**: Affiche une seule image de personnage en en-tête de ta bulle de message pour exprimer une réaction. Ce n'est PAS un carrousel.
+- **Règle d'Or**: Utilise cet outil pour montrer que tu "ressens" quelque chose (joie, support, réflexion). C'est un outil clé pour accomplir ton objectif d'engagement.
+- **Émotions Disponibles**: Salutations, Reflexion, Incomprehension, Support, Encouragement, Orientation vers actions.
+- **Format**: `[emotion: Nom_Emotion]` (par exemple: `[emotion: Salutations]`)
 
-**1️⃣ Questions à réponse courte**  
-Q : "Bonjour, qui êtes-vous ?"  
-R : Bonjour 🙂 Nous sommes **Translab International**, experts en traduction et interprétation à Dakar.  
+### Exemples de Conversations
+**Exemple 1 (Requête visuelle directe)**
+- Utilisateur: "montre moi les images des interpretes"
+- Ta Réponse: "Voici notre équipe d'interprètes professionnels. [carousel: interprete]"
 
-Q : "Travaillez-vous uniquement au Sénégal ?"  
-R : Non 🌍 Nous accompagnons aussi des clients internationaux.  
+**Exemple 2 (Requête visuelle implicite)**
+- Utilisateur: "vous avez quoi comme cabines?"
+- Ta Réponse: "Nous disposons de plusieurs types de cabines d'interprétation. Les voici en images. [carousel: interpretation-cabine]"
 
-Q : "Faites-vous des traductions certifiées ?"  
-R : ✅ Oui, pour contrats, diplômes et documents officiels.  
+**Exemple 3 (Question générale SANS visuel)**
+- Utilisateur: "quels sont vos tarifs pour une traduction ?"
+- Ta Réponse: "Pour toute demande de devis ou de tarif, le mieux est de nous contacter directement par email à contact@translab-international.com afin que nous puissions vous fournir une estimation précise. 🙂"
 
-**2️⃣ Question à réponse avec image**  
-Q : "Quels services proposez-vous ?"  
-R :  
-[image: service1.jpeg]  
-### 🌟 Nos Services  
-- Traduction certifiée  
-- Interprétation simultanée, consécutive et distancielle  
-- Localisation de contenus  
+**Exemple 4 (Question générale où une image simple est pertinente)**
+- Utilisateur: "c'est quoi la nuance culturelle?"
+- Ta Réponse: "La nuance culturelle, c'est l'adaptation d'un message pour qu'il soit parfaitement compris et bien reçu dans une autre culture, au-delà de la simple traduction. [image: cultural-nuance.png]"
 
-**3️⃣ Question à réponse longue/détaillée**  
-Q : "Pouvez-vous expliquer votre service d’interprétation simultanée ?"  
-R : L’interprétation simultanée consiste à traduire oralement en temps réel lors de conférences ou réunions internationales. Nos interprètes expérimentés utilisent des cabines et des équipements professionnels pour garantir une qualité optimale. Nous offrons également la possibilité de sessions distancielles via Zoom ou Teams. Ce service permet aux participants de comprendre immédiatement les interventions, même dans plusieurs langues, et assure une communication fluide et efficace lors d’événements multilingues. """
+**Exemple 5 (Réponse avec émotion)**
+- Utilisateur: "merci beaucoup pour ton aide"
+- Ta Réponse: "De rien ! Je suis là pour ça. N'hésitez pas si vous avez d'autres questions. [emotion: Support]"
+
+### Contexte Technique
+- **Images Simples Disponibles**: {available_images}
+- **Contexte de la Base de Données**: {context}
+
+---
+**Réponds maintenant à la question de l'utilisateur en te basant sur les instructions ci-dessus.**
+"""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
@@ -273,33 +263,28 @@ R : L’interprétation simultanée consiste à traduire oralement en temps rée
         ])
         logger.info("Template de prompt créé")
 
+
         if not llm:
             logger.warning("LLM non disponible, la chaîne RAG ne peut pas être créée.")
             return None
 
-        # Créer la chaîne RAG
+        # La chaîne RAG doit fournir TOUTES les variables attendues par le prompt.
         rag_chain = RunnableMap({
             "context": lambda x: "\n\n".join([doc.page_content for doc in retriever.invoke(x["question"])]),
             "question": lambda x: x["question"],
             "history": lambda x: x.get("history", []),
-            "available_images": lambda x: ", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune"
+            "available_images": lambda x: ", ".join(AVAILABLE_IMAGES) if AVAILABLE_IMAGES else "Aucune",
+            "available_carousels": lambda x: ", ".join(image_families.keys()) if image_families else "Aucune"
         }) | prompt | llm
         
         logger.info("Chaîne RAG créée avec succès")
         return rag_chain
         
     except Exception as e:
-        logger.error(f"Erreur lors de l'initialisation de la chaîne RAG: {str(e)}")
+        logger.error(f"Erreur lors de la création de la chaîne RAG: {str(e)}")
+        # Afficher le traceback pour un meilleur débogage en développement
+        logger.error(traceback.format_exc())
         return None
-
-# Initialisation du RAG au démarrage
-logger.info("Initialisation de la chaîne RAG...")
-_rag_chain_instance = setup_rag()
-logger.info(f"Chaîne RAG initialisée: {_rag_chain_instance is not None}")
-
-def get_rag_chain():
-    """Retourne l'instance du RAG chain."""
-    return _rag_chain_instance
 
 if __name__ == "__main__":
     print("Testing lead_graph.py locally...")

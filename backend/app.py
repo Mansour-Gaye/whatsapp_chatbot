@@ -6,6 +6,7 @@ import csv
 import io
 import re
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from whatsapp_webhook import whatsapp
 from functools import wraps
@@ -13,17 +14,80 @@ from functools import wraps
 # --- Section d'importation des modules de traitement ---
 try:
     # Importation sélective pour la clarté
-    from lead_graph import structured_llm, save_lead, llm, Lead, get_rag_chain
+    from lead_graph import structured_llm, save_lead, llm, Lead, create_rag_chain
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     LEAD_GRAPH_FOR_APP_IMPORTED = True
     print("[APP_INIT] Successfully imported all necessary modules.")
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, get_rag_chain = None, None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, create_rag_chain = None, None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
+
+# --- Image Family Discovery ---
+def discover_image_families(static_dir):
+    """
+    Automatically discovers image families by finding common prefixes in filenames.
+    A family is a group of 2 or more images sharing a common prefix ending in a hyphen.
+    """
+    public_dir = os.path.join(static_dir, 'public')
+    if not os.path.exists(public_dir):
+        print(f"[IMAGE_DISCOVERY] Directory not found: {public_dir}")
+        return {}
+
+    # Group files by their first component (e.g., "interpretation-cabine-1.png" -> "interpretation")
+    # This helps to narrow down the search space for common prefixes.
+    groups = defaultdict(list)
+    all_files = [f for f in os.listdir(public_dir) if os.path.isfile(os.path.join(public_dir, f)) and '-' in f]
+    for filename in all_files:
+        groups[filename.split('-', 1)[0]].append(filename)
+
+    final_families = {}
+    for key, file_list in groups.items():
+        if len(file_list) < 2:
+            continue
+
+        # Find the longest common prefix for the group
+        strs = sorted(file_list)
+        first, last = strs[0], strs[-1]
+        i = 0
+        while i < len(first) and i < len(last) and first[i] == last[i]:
+            i += 1
+        prefix = first[:i]
+
+        # Refine the prefix to end at the last sensible hyphen
+        if '-' in prefix:
+            # This will correctly find "interpretation-cabine" from "interpretation-cabine-"
+            family_name = prefix.rsplit('-', 1)[0]
+
+            # Recalculate files belonging to this more precise family prefix
+            family_files = [f for f in file_list if f.startswith(family_name + '-')]
+
+            if len(family_files) >= 2:
+                final_families[family_name] = [f"/static/public/{f}" for f in sorted(family_files)]
+
+    print(f"[IMAGE_DISCOVERY] Automatically discovered families: {list(final_families.keys())}")
+    return final_families
+
+IMAGE_FAMILIES = {} # Initialize as global
+with app.app_context():
+    IMAGE_FAMILIES = discover_image_families(app.static_folder)
+# --- End Image Family Discovery ---
+
+
+# --- RAG Chain Initialization ---
+RAG_CHAIN = None
+if LEAD_GRAPH_FOR_APP_IMPORTED:
+    print("[APP_INIT] Initializing RAG chain...")
+    RAG_CHAIN = create_rag_chain(IMAGE_FAMILIES)
+    if RAG_CHAIN:
+        print("[APP_INIT] RAG chain initialized successfully.")
+    else:
+        print("[APP_INIT] CRITICAL: RAG chain initialization failed.")
+# --- End RAG Chain Initialization ---
+
 
 # --- Configuration pour l'admin ---
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'default-secret-key-for-dev')
@@ -67,44 +131,90 @@ def chat():
         return jsonify({"status": "error", "response": "L'historique de conversation du client est vide"}), 400
 
     try:
-        rag_chain = get_rag_chain()
-        if not rag_chain:
-            print("[API_CHAT] CRITICAL: RAG chain is not available.")
-            raise Exception("La chaîne de conversation RAG n'est pas initialisée.")
+        if not RAG_CHAIN:
+            print("[API_CHAT] CRITICAL: RAG_CHAIN is not available.")
+            return jsonify({"status": "error", "response": "L'assistant IA est actuellement indisponible."}), 500
 
-        # --- Construction de l'historique à partir des données du client ---
-        # L'historique du client inclut le message actuel de l'utilisateur.
-        # Nous construisons l'historique pour LangChain à partir de tous les messages sauf le dernier.
         langchain_history = []
         for msg in client_history[:-1]:
             if msg.get("role") == "user":
                 langchain_history.append(HumanMessage(content=msg.get("content")))
-            # Le frontend envoie 'assistant', mais nous vérifions aussi 'bot' pour la robustesse
             elif msg.get("role") in ["assistant", "bot"]:
                 langchain_history.append(AIMessage(content=msg.get("content")))
 
-        # La dernière entrée de l'historique client est la question actuelle
         last_user_message = client_history[-1]["content"]
 
-        # Invoquer la chaîne RAG avec l'historique fourni par le client
-        response_message = rag_chain.invoke({
+        # Invoquer la chaîne RAG
+        response_message = RAG_CHAIN.invoke({
             "question": last_user_message,
             "history": langchain_history
         })
         
         response_content = response_message.content
+        response_options = {}
 
-        # --- Début du Guardrail pour le formatage de l'image ---
-        # Cette partie peut être retirée si le modèle est censé le formater correctement maintenant
-        # Je vais le garder pour l'instant comme mesure de sécurité.
-        image_filenames = ["service1.jpeg", "cultural-nuance.png", "engaged-audience-dakar.png"]
-        for filename in image_filenames:
-            if response_content.strip().startswith(filename):
-                response_content = f"[image: {filename}]\n\n" + response_content.strip()[len(filename):].strip()
-                break
-        # --- Fin du Guardrail ---
+        # --- Analyse de la réponse pour les commandes spéciales ---
+        carousel_match = re.search(r'\[carousel:\s*([^\]]+)\]', response_content)
+        if carousel_match:
+            family_name = carousel_match.group(1).strip()
+            # Nettoyer le texte de la réponse
+            response_content = response_content.replace(carousel_match.group(0), '').strip()
 
-        # --- Log conversation to Supabase ---
+            if family_name in IMAGE_FAMILIES:
+                response_options['carousel_images'] = IMAGE_FAMILIES[family_name]
+                print(f"[API_CHAT] Carousel triggered for family: {family_name}")
+            else:
+                # Si la famille demandée par le LLM n'existe pas, on loggue une alerte
+                print(f"[API_CHAT] WARNING: Carousel requested for non-existent family: {family_name}")
+
+        # --- Smart Guardrail for "near misses" on carousels ---
+        # If the AI announced a carousel but forgot the tag, we'll try to add it.
+        if not response_options.get('carousel_images') and "carrousel" in response_content.lower():
+            user_message_lower = last_user_message.lower()
+            # This keyword map is specifically for the guardrail
+            guardrail_family_map = {
+                "interpretes": "interprete",
+                "interprete": "interprete",
+                "cabines": "interpretation-cabine",
+                "cabine": "interpretation-cabine",
+                "personnages": "personnage",
+                "personnage": "personnage",
+                "technologie": "technologie-cabine",
+                "webinaire": "webinaire-onu-femmes-crdi",
+                "expériences": "webinaire-onu-femmes-crdi", # Map "experiences" to a relevant carousel
+                "experience": "webinaire-onu-femmes-crdi",
+                "services": "interpretation-cabine" # Map "services" to a relevant carousel
+            }
+            for keyword, family in guardrail_family_map.items():
+                if keyword in user_message_lower and family in IMAGE_FAMILIES:
+                    print(f"[API_CHAT] Smart Guardrail: AI announced a carousel, adding family '{family}' based on user query.")
+                    response_options['carousel_images'] = IMAGE_FAMILIES[family]
+                    break
+
+        # --- Analyse de la réponse pour l'émotion ---
+        emotion_match = re.search(r'\[emotion:\s*([^\]]+)\]', response_content)
+        if emotion_match:
+            emotion_name = emotion_match.group(1).strip()
+            response_content = response_content.replace(emotion_match.group(0), '').strip()
+
+            emotion_map = {
+                "Salutations": "Salutations",
+                "Reflexion": "Réflexion",
+                "Incomprehension": "Incompréhension",
+                "Support": "Support",
+                "Encouragement": "encouragement",
+                "Orientation vers actions": "Orientation vers actions"
+            }
+
+            if emotion_name in emotion_map:
+                filename = f"personnage-{emotion_map[emotion_name]}.png"
+                if os.path.isfile(os.path.join(app.static_folder, 'public', filename)):
+                    response_options['emotion_image'] = f"/static/public/{filename}"
+                    print(f"[API_CHAT] Emotion triggered: {emotion_name}")
+                else:
+                    print(f"[API_CHAT] WARNING: Emotion image file not found: {filename}")
+
+        # --- Log de la conversation dans Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
             try:
                 user_message_to_log = {
@@ -114,6 +224,7 @@ def chat():
                 }
                 supabase_client.table("conversations").insert(user_message_to_log).execute()
 
+                # On loggue la réponse textuelle, même si un carrousel est présent
                 assistant_response_data = {
                     "visitor_id": visitor_id,
                     "role": "assistant",
@@ -124,9 +235,9 @@ def chat():
                 print(f"[API_CHAT] Successfully logged conversation turn for {visitor_id} to Supabase.")
             except Exception as e_log:
                 print(f"[API_CHAT] ERROR logging to Supabase for {visitor_id}: {e_log}")
-        # --- End of Supabase logging ---
+        # --- Fin du log Supabase ---
 
-        return jsonify({"status": "success", "response": response_content})
+        return jsonify({"status": "success", "response": response_content, "options": response_options})
 
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")

@@ -200,6 +200,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return cardContainer;
     }
 
+    function createImageGrid(imageUrls) {
+        const gridContainer = document.createElement('div');
+        gridContainer.className = 'image-grid-container';
+
+        imageUrls.forEach(url => {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'Image de la grille';
+            img.loading = 'lazy';
+            img.className = 'image-grid-item';
+            gridContainer.appendChild(img);
+        });
+
+        return gridContainer;
+    }
+
 
     function renderMessage(messageData) {
         let { text, sender, timestamp, options = {}, isHistory } = messageData;
@@ -209,6 +225,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const messageBubble = document.createElement('div');
         messageBubble.classList.add('message-bubble', sender);
+
+        // --- Logique de Rendu de l'En-tête d'Émotion ---
+        if (sender === 'bot' && options.emotion_image) {
+            const emotionHeader = document.createElement('div');
+            emotionHeader.className = 'emotion-header';
+            const img = document.createElement('img');
+            img.src = options.emotion_image;
+            img.alt = "Illustration d'émotion";
+            img.loading = 'lazy';
+            emotionHeader.appendChild(img);
+            messageBubble.appendChild(emotionHeader);
+        }
+        // --- Fin de la Logique de Rendu de l'En-tête d'Émotion ---
 
         // --- Image Parsing Logic ---
         const imageRegex = /\[image:\s*([^\]]+)\]/g;
@@ -240,6 +269,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             messageBubble.appendChild(messageContent);
         }
+
+        // --- Logique de Rendu de la Grille d'Images ---
+        if (options.carousel_images && Array.isArray(options.carousel_images) && options.carousel_images.length > 0) {
+            const gridElement = createImageGrid(options.carousel_images);
+            // Insérer la grille après le contenu textuel s'il existe, ou en premier.
+            if (messageBubble.querySelector('.message-content')) {
+                messageBubble.querySelector('.message-content').insertAdjacentElement('afterend', gridElement);
+            } else {
+                messageBubble.prepend(gridElement);
+            }
+        }
+        // --- Fin de la Logique de Rendu de la Grille ---
 
         if (options.card) {
             messageBubble.appendChild(createCard(options.card));
@@ -317,24 +358,27 @@ document.addEventListener('DOMContentLoaded', () => {
             content: msg.text
         }));
 
-        console.log("Sending to backend. History payload:", JSON.stringify(historyPayload, null, 2));
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ history: historyPayload, visitorId: visitorId })
             });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                const errorMessage = errorData ? errorData.response : `HTTP error! status: ${response.status}`;
-                console.error("Backend error:", errorMessage);
-                return `Je rencontre un souci technique. ${errorMessage}`;
-            }
+
+            // La réponse du backend est maintenant toujours un objet JSON, même en cas d'erreur
             const data = await response.json();
-            return data.status === "success" ? data.response : (data.response || "Une erreur inattendue est survenue.");
+
+            if (!response.ok) {
+                console.error("Backend error:", data.response || `HTTP error! status: ${response.status}`);
+                // Retourner un objet d'erreur standardisé
+                return { status: "error", response: data.response || "Une erreur technique est survenue." };
+            }
+
+            return data; // Contient { status, response, options }
         } catch (e) {
             console.error("Network or fetch error:", e);
-            return "Erreur de connexion au serveur.";
+            // Retourner un objet d'erreur standardisé
+            return { status: "error", response: "Erreur de connexion au serveur." };
         }
     }
 
@@ -547,8 +591,15 @@ function toggleChatbox(forceState) {
                     }
                 }
             } else { // Handles leadStep 0 and 2
-                const botReply = await sendToBackend();
-                addMessage(botReply, 'bot');
+                const botResponse = await sendToBackend(); // C'est maintenant un objet
+
+                if (botResponse.status === 'success') {
+                    // Passer le texte et les options (qui peuvent inclure le carrousel) à addMessage
+                    addMessage(botResponse.response, 'bot', botResponse.options || {});
+                } else {
+                    // En cas d'erreur retournée par le backend
+                    addMessage(botResponse.response, 'bot');
+                }
 
                 if (leadStep === 0) {
                     leadExchangeCount++;
