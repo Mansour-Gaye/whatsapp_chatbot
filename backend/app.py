@@ -29,31 +29,46 @@ CORS(app)
 # --- Image Family Discovery ---
 def discover_image_families(static_dir):
     """
-    Scans the /static/public directory to find groups of images with common prefixes,
-    which are treated as "families" for carousels.
+    Automatically discovers image families by finding common prefixes in filenames.
+    A family is a group of 2 or more images sharing a common prefix ending in a hyphen.
     """
     public_dir = os.path.join(static_dir, 'public')
-
     if not os.path.exists(public_dir):
         print(f"[IMAGE_DISCOVERY] Directory not found: {public_dir}")
         return {}
 
-    all_files = [f for f in os.listdir(public_dir) if os.path.isfile(os.path.join(public_dir, f))]
-
-    temp_families = defaultdict(list)
+    # Group files by their first component (e.g., "interpretation-cabine-1.png" -> "interpretation")
+    # This helps to narrow down the search space for common prefixes.
+    groups = defaultdict(list)
+    all_files = [f for f in os.listdir(public_dir) if os.path.isfile(os.path.join(public_dir, f)) and '-' in f]
     for filename in all_files:
-        if '-' in filename:
-            prefix = filename.rsplit('-', 1)[0]
-            temp_families[prefix].append(filename)
-
+        groups[filename.split('-', 1)[0]].append(filename)
+    
     final_families = {}
-    for prefix, files in temp_families.items():
-        # A family must have at least 2 images to be a carousel.
-        if len(files) >= 2:
-            sorted_files = sorted(files)
-            final_families[prefix] = [f"/static/public/{f}" for f in sorted_files]
+    for key, file_list in groups.items():
+        if len(file_list) < 2:
+            continue
+            
+        # Find the longest common prefix for the group
+        strs = sorted(file_list)
+        first, last = strs[0], strs[-1]
+        i = 0
+        while i < len(first) and i < len(last) and first[i] == last[i]:
+            i += 1
+        prefix = first[:i]
 
-    print(f"[IMAGE_DISCOVERY] Discovered image families: {list(final_families.keys())}")
+        # Refine the prefix to end at the last sensible hyphen
+        if '-' in prefix:
+            # This will correctly find "interpretation-cabine" from "interpretation-cabine-"
+            family_name = prefix.rsplit('-', 1)[0]
+            
+            # Recalculate files belonging to this more precise family prefix
+            family_files = [f for f in file_list if f.startswith(family_name + '-')]
+            
+            if len(family_files) >= 2:
+                final_families[family_name] = [f"/static/public/{f}" for f in sorted(family_files)]
+    
+    print(f"[IMAGE_DISCOVERY] Automatically discovered families: {list(final_families.keys())}")
     return final_families
 
 IMAGE_FAMILIES = {} # Initialize as global
@@ -139,20 +154,41 @@ def chat():
         response_options = {}
 
         # --- Analyse de la réponse pour les commandes spéciales ---
-        carousel_match = re.search(r'\[carousel:\s*([^\]]+)\]', response_content)
+        carousel_match = re.search(r'\[carousel:\s*([^]]+)\]', response_content)
         if carousel_match:
             family_name = carousel_match.group(1).strip()
             # Nettoyer le texte de la réponse
             response_content = response_content.replace(carousel_match.group(0), '').strip()
-
+            
             if family_name in IMAGE_FAMILIES:
                 response_options['carousel_images'] = IMAGE_FAMILIES[family_name]
                 print(f"[API_CHAT] Carousel triggered for family: {family_name}")
             else:
                 # Si la famille demandée par le LLM n'existe pas, on loggue une alerte
                 print(f"[API_CHAT] WARNING: Carousel requested for non-existent family: {family_name}")
-
-        # Le vieux guardrail pour les images est maintenant supprimé car le LLM gère cela.
+        
+        # --- Analyse de la réponse pour l'émotion ---
+        emotion_match = re.search(r'\[emotion:\s*([^]]+)\]', response_content)
+        if emotion_match:
+            emotion_name = emotion_match.group(1).strip()
+            response_content = response_content.replace(emotion_match.group(0), '').strip()
+            
+            emotion_map = {
+                "Salutations": "Salutations",
+                "Reflexion": "Réflexion",
+                "Incomprehension": "Incompréhension",
+                "Support": "Support",
+                "Encouragement": "encouragement",
+                "Orientation vers actions": "Orientation vers actions"
+            }
+            
+            if emotion_name in emotion_map:
+                filename = f"personnage-{emotion_map[emotion_name]}.png"
+                if os.path.isfile(os.path.join(app.static_folder, 'public', filename)):
+                    response_options['emotion_image'] = f"/static/public/{filename}"
+                    print(f"[API_CHAT] Emotion triggered: {emotion_name}")
+                else:
+                    print(f"[API_CHAT] WARNING: Emotion image file not found: {filename}")
 
         # --- Log de la conversation dans Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":

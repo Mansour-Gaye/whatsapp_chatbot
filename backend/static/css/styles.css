@@ -665,74 +665,88 @@ body {
   left: calc(var(--spacing-unit) * 3);
 }
 
-/* --- Styles pour le Carrousel --- */
-.carousel-container {
-    position: relative;
-    width: 100%;
-    /* La largeur est déterminée par le conteneur .message-bubble */
-    margin-top: 8px;
-    margin-bottom: 4px;
-    overflow: hidden;
-    border-radius: 10px; /* Un peu moins que la bulle de message */
-    -webkit-mask-image: -webkit-radial-gradient(white, black); /* Empêche les images de "dépasser" les coins arrondis */
-}
-
-.carousel-track {
+/* --- Styles pour la Grille d'Images Horizontale --- */
+.image-grid-container {
     display: flex;
-    /* La transition est gérée par JS pour de meilleures performances */
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 8px; /* Espace entre les images */
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 2px; /* Un peu d'espace vertical et horizontal pour l'ombre */
+    margin: 8px -14px 0 -14px; /* Compense le padding de la bulle pour un effet pleine largeur */
+    /* Améliore le défilement sur les appareils tactiles */
+    -webkit-overflow-scrolling: touch; 
+    /* Cache la barre de défilement par défaut sur certains navigateurs */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
 }
 
-.carousel-item {
-    min-width: 100%;
-    box-sizing: border-box;
-    flex-shrink: 0;
+/* Cacher la barre de défilement pour Chrome, Safari, et Opera mais la laisser pour le hover */
+.image-grid-container::-webkit-scrollbar {
+    height: 6px;
+    background: transparent;
+}
+.image-grid-container::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+.image-grid-container:hover::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
 }
 
-.carousel-item img {
-    width: 100%;
-    display: block;
-    height: auto;
-    object-fit: cover;
-    /* Pas de rayon ici, le conteneur s'en charge */
-}
-
-.carousel-button {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background-color: rgba(20, 20, 20, 0.6);
-    color: white;
-    border: none;
-    padding: 0;
+.image-grid-item {
+    height: 140px; /* Hauteur fixe pour toutes les images */
+    width: auto;   /* La largeur s'ajuste pour garder les proportions */
+    border-radius: 8px;
+    flex-shrink: 0; /* Empêche les images de se déformer */
+    object-fit: cover; /* Assure que l'image remplit l'espace sans se déformer */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease-in-out;
     cursor: pointer;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 18px;
-    z-index: 10;
-    transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
-.carousel-button:hover {
-    background-color: rgba(0, 0, 0, 0.8);
-    transform: translateY(-50%) scale(1.1);
+.image-grid-item:hover {
+    transform: scale(1.05); /* Effet de zoom au survol */
 }
 
-.carousel-button:active {
-    transform: translateY(-50%) scale(1.0);
+/* --- Styles pour l'En-tête d'Émotion --- */
+.message-bubble.bot {
+    /* Le padding est retiré ici et géré par les éléments enfants
+       pour permettre à l'image d'aller de bord à bord. */
+    padding: 0;
 }
 
-.carousel-button.prev {
-    left: 10px;
+.emotion-header {
+    height: 80px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px 12px 0 0;
 }
 
-.carousel-button.next {
-    right: 10px;
+.emotion-header img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%; /* Se concentre sur le haut de l'image */
 }
+
+/* Rétablir le padding pour les autres contenus de la bulle */
+.message-bubble.bot > .message-content {
+    padding: 8px 14px;
+}
+/* Cas où il n'y a que l'en-tête et pas de texte */
+.message-bubble.bot > .emotion-header + .message-footer {
+     padding: 8px 14px;
+}
+.message-bubble.bot .message-footer {
+    padding: 0 14px 10px 14px;
+}
+.message-bubble.bot > .image-grid-container {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
 
 /* -------------------- */
 /* CUSTOM CONTRAST FIX  */

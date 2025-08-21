@@ -200,77 +200,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return cardContainer;
     }
 
-    function createCarousel(imageUrls) {
-        const carouselContainer = document.createElement('div');
-        carouselContainer.className = 'carousel-container';
-
-        const carouselTrack = document.createElement('div');
-        carouselTrack.className = 'carousel-track';
+    function createImageGrid(imageUrls) {
+        const gridContainer = document.createElement('div');
+        gridContainer.className = 'image-grid-container';
 
         imageUrls.forEach(url => {
-            const carouselItem = document.createElement('div');
-            carouselItem.className = 'carousel-item';
             const img = document.createElement('img');
             img.src = url;
-            img.alt = 'Image du carrousel';
-            img.loading = 'lazy'; // Améliore les performances
-            carouselItem.appendChild(img);
-            carouselTrack.appendChild(carouselItem);
+            img.alt = 'Image de la grille';
+            img.loading = 'lazy';
+            img.className = 'image-grid-item';
+            gridContainer.appendChild(img);
         });
 
-        carouselContainer.appendChild(carouselTrack);
-
-        const prevButton = document.createElement('button');
-        prevButton.className = 'carousel-button prev';
-        prevButton.innerHTML = '&#10094;';
-        prevButton.setAttribute('aria-label', 'Image précédente');
-
-        const nextButton = document.createElement('button');
-        nextButton.className = 'carousel-button next';
-        nextButton.innerHTML = '&#10095;';
-        nextButton.setAttribute('aria-label', 'Image suivante');
-
-        carouselContainer.appendChild(prevButton);
-        carouselContainer.appendChild(nextButton);
-
-        let currentIndex = 0;
-
-        // Fonction pour mettre à jour la position du carrousel
-        const updateCarouselPosition = () => {
-            const itemWidth = carouselTrack.querySelector('.carousel-item').getBoundingClientRect().width;
-            // Utilise une transformation CSS pour un défilement fluide
-            carouselTrack.style.transform = `translateX(-${currentIndex * itemWidth}px)`;
-        };
-
-        prevButton.addEventListener('click', () => {
-            currentIndex = (currentIndex > 0) ? currentIndex - 1 : imageUrls.length - 1;
-            updateCarouselPosition();
-        });
-
-        nextButton.addEventListener('click', () => {
-            currentIndex = (currentIndex < imageUrls.length - 1) ? currentIndex + 1 : 0;
-            updateCarouselPosition();
-        });
-
-        // Mettre à jour la position en cas de redimensionnement de la fenêtre
-        // Utilise un debounce pour ne pas surcharger le navigateur
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(updateCarouselPosition, 100);
-        });
-
-        // Observer lorsque le carrousel devient visible pour la première fois pour calculer la largeur
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                updateCarouselPosition();
-                observer.disconnect(); // Ne l'exécuter qu'une fois
-            }
-        }, { threshold: 0.1 });
-
-        observer.observe(carouselContainer);
-
-        return carouselContainer;
+        return gridContainer;
     }
 
 
@@ -283,8 +226,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageBubble = document.createElement('div');
         messageBubble.classList.add('message-bubble', sender);
 
+        // --- Logique de Rendu de l'En-tête d'Émotion ---
+        if (sender === 'bot' && options.emotion_image) {
+            const emotionHeader = document.createElement('div');
+            emotionHeader.className = 'emotion-header';
+            const img = document.createElement('img');
+            img.src = options.emotion_image;
+            img.alt = "Illustration d'émotion";
+            img.loading = 'lazy';
+            emotionHeader.appendChild(img);
+            messageBubble.appendChild(emotionHeader);
+        }
+        // --- Fin de la Logique de Rendu de l'En-tête d'Émotion ---
+
         // --- Image Parsing Logic ---
-        const imageRegex = /\[image:\s*([^\]]+)\]/g;
+        const imageRegex = /\[image:\s*([^]]+)\]/g;
         const imageMatches = text.match(imageRegex);
 
         if (imageMatches) {
@@ -314,17 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
             messageBubble.appendChild(messageContent);
         }
 
-        // --- Logique de Rendu du Carrousel ---
+        // --- Logique de Rendu de la Grille d'Images ---
         if (options.carousel_images && Array.isArray(options.carousel_images) && options.carousel_images.length > 0) {
-            const carouselElement = createCarousel(options.carousel_images);
-            // Insérer le carrousel après le contenu textuel s'il existe, ou en premier.
+            const gridElement = createImageGrid(options.carousel_images);
+            // Insérer la grille après le contenu textuel s'il existe, ou en premier.
             if (messageBubble.querySelector('.message-content')) {
-                messageBubble.querySelector('.message-content').insertAdjacentElement('afterend', carouselElement);
+                messageBubble.querySelector('.message-content').insertAdjacentElement('afterend', gridElement);
             } else {
-                messageBubble.prepend(carouselElement);
+                messageBubble.prepend(gridElement);
             }
         }
-        // --- Fin de la Logique de Rendu du Carrousel ---
+        // --- Fin de la Logique de Rendu de la Grille ---
 
         if (options.card) {
             messageBubble.appendChild(createCard(options.card));
@@ -636,7 +592,7 @@ function toggleChatbox(forceState) {
                 }
             } else { // Handles leadStep 0 and 2
                 const botResponse = await sendToBackend(); // C'est maintenant un objet
-
+                
                 if (botResponse.status === 'success') {
                     // Passer le texte et les options (qui peuvent inclure le carrousel) à addMessage
                     addMessage(botResponse.response, 'bot', botResponse.options || {});
