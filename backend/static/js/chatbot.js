@@ -383,9 +383,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleQuickReplyClick(text) {
-        addMessage(text, 'user'); // addMessage va maintenant cacher les quick replies
+        // Log the click event to the backend in a "fire and forget" way
+        if (visitorId) {
+            fetch('/api/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    visitorId: visitorId,
+                    event_type: 'quick_reply_click',
+                    event_value: text
+                })
+            }).catch(error => console.error('Error tracking event:', error)); // Log error but don't block user flow
+        }
+
+        addMessage(text, 'user'); // addMessage will now hide the quick replies
         chatboxInput.value = '';
-        handleUserMessage(text); // Appel réel au backend
+        handleUserMessage(text); // Real call to the backend
     }
 
 

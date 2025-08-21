@@ -17,11 +17,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('.nav-link');
     const sections = document.querySelectorAll('.section-content');
     const leadsTbody = document.getElementById('leads-tbody');
-    const totalLeadsEl = document.getElementById('total-leads');
-    const leadsChartCanvas = document.getElementById('leads-chart');
     const searchFilter = document.getElementById('search-filter');
     const paginationControls = document.getElementById('pagination-controls');
     const sortableHeaders = document.querySelectorAll('.sortable');
+
+    // Analytics selectors
+    const totalConversationsEl = document.getElementById('total-conversations');
+    const totalLeadsEl = document.getElementById('total-leads');
+    const avgMessagesEl = document.getElementById('avg-messages');
+    const topCarouselsList = document.getElementById('top-carousels-list');
+    const topEmotionsList = document.getElementById('top-emotions-list');
+    const topImagesList = document.getElementById('top-images-list');
+    const topQuickRepliesList = document.getElementById('top-quick-replies-list');
 
     // Modals
     const conversationModal = document.getElementById('conversation-modal');
@@ -103,12 +110,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const renderLeadsChart = (leadsOverTime) => {
-        new Chart(leadsChartCanvas, {
-            type: 'bar', data: { labels: leadsOverTime.labels, datasets: [{
-                label: 'Leads par jour', data: leadsOverTime.data,
-                backgroundColor: 'rgba(52, 152, 219, 0.5)', borderColor: 'rgba(52, 152, 219, 1)', borderWidth: 1
-            }]}, options: { scales: { y: { beginAtZero: true } } }
+    const populateTopList = (element, items, placeholder = 'Aucune donnée') => {
+        element.innerHTML = '';
+        if (!items || items.length === 0) {
+            element.innerHTML = `<li class="text-gray-500 italic">${placeholder}</li>`;
+            return;
+        }
+        items.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'flex justify-between items-center text-sm';
+            li.innerHTML = `
+                <span class="truncate pr-2">${item.name}</span>
+                <span class="font-bold bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5 text-xs">${item.count}</span>
+            `;
+            element.appendChild(li);
         });
     };
 
@@ -199,17 +214,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Data Fetch
         try {
-            const [statsRes, leadsRes] = await Promise.all([fetch('/api/admin/stats'), fetch('/api/admin/leads')]);
-            if (!statsRes.ok || !leadsRes.ok) throw new Error('Échec du chargement des données initiales');
-            const statsData = await statsRes.json();
+            const [analyticsRes, leadsRes] = await Promise.all([fetch('/api/admin/analytics'), fetch('/api/admin/leads')]);
+            if (!analyticsRes.ok || !leadsRes.ok) throw new Error('Échec du chargement des données initiales');
+
+            const analyticsData = await analyticsRes.json();
             const leadsData = await leadsRes.json();
-            totalLeadsEl.textContent = statsData.total_leads;
-            renderLeadsChart(statsData.leads_over_time);
+
+            // Populate summary stats
+            totalConversationsEl.textContent = analyticsData.summary_stats.total_conversations;
+            totalLeadsEl.textContent = analyticsData.summary_stats.total_leads;
+            avgMessagesEl.textContent = analyticsData.summary_stats.avg_messages_per_conversation;
+
+            // Populate top event lists
+            populateTopList(topCarouselsList, analyticsData.top_events.carousels);
+            populateTopList(topEmotionsList, analyticsData.top_events.emotions);
+            populateTopList(topImagesList, analyticsData.top_events.image_tags);
+            populateTopList(topQuickRepliesList, analyticsData.top_events.quick_reply_clicks);
+
+            // Populate leads table
             state.allLeads = leadsData;
             render();
         } catch (error) {
             console.error(error);
-            document.querySelector('main').innerHTML = `<p class="text-red-500 p-10">${error.message}. Vérifiez la console.</p>`;
+            document.querySelector('#home-section').innerHTML = `<p class="text-red-500 p-10">${error.message}. Vérifiez la console.</p>`;
         }
 
         // Event Listeners
