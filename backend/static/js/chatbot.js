@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Fin de la Logique de Rendu de l'En-tête d'Émotion ---
 
         // --- Image Parsing Logic ---
-        const imageRegex = /\[image:\s*([^\]]+)\]/g;
+        const imageRegex = /\[image:\s*([^]]+)\]/g;
         const imageMatches = text.match(imageRegex);
 
         if (imageMatches) {

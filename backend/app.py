@@ -62,11 +62,13 @@ def discover_image_families(static_dir):
             # This will correctly find "interpretation-cabine" from "interpretation-cabine-"
             family_name = prefix.rsplit('-', 1)[0]
 
+
             # Recalculate files belonging to this more precise family prefix
             family_files = [f for f in file_list if f.startswith(family_name + '-')]
 
             if len(family_files) >= 2:
                 final_families[family_name] = [f"/static/public/{f}" for f in sorted(family_files)]
+
 
     print(f"[IMAGE_DISCOVERY] Automatically discovered families: {list(final_families.keys())}")
     return final_families
@@ -155,6 +157,7 @@ def chat():
 
         # --- Analyse de la réponse pour les commandes spéciales ---
         carousel_match = re.search(r'\[carousel:\s*([^\]]+)\]', response_content)
+
         if carousel_match:
             family_name = carousel_match.group(1).strip()
             # Nettoyer le texte de la réponse
@@ -166,6 +169,7 @@ def chat():
             else:
                 # Si la famille demandée par le LLM n'existe pas, on loggue une alerte
                 print(f"[API_CHAT] WARNING: Carousel requested for non-existent family: {family_name}")
+
 
         # --- Smart Guardrail for "near misses" on carousels ---
         # If the AI announced a carousel but forgot the tag, we'll try to add it.
@@ -196,6 +200,7 @@ def chat():
         if emotion_match:
             emotion_name = emotion_match.group(1).strip()
             response_content = response_content.replace(emotion_match.group(0), '').strip()
+
 
             emotion_map = {
                 "Salutations": "Salutations",
