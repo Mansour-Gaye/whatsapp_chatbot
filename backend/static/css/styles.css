@@ -674,7 +674,10 @@ body {
     padding: 8px 2px; /* Un peu d'espace vertical et horizontal pour l'ombre */
     margin: 8px -14px 0 -14px; /* Compense le padding de la bulle pour un effet pleine largeur */
     /* Améliore le défilement sur les appareils tactiles */
-    -webkit-overflow-scrolling: touch; 
+
+    -webkit-overflow-scrolling: touch;
+ 
+
     /* Cache la barre de défilement par défaut sur certains navigateurs */
     scrollbar-width: thin;
     scrollbar-color: var(--border-color) transparent;

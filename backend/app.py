@@ -43,12 +43,12 @@ def discover_image_families(static_dir):
     all_files = [f for f in os.listdir(public_dir) if os.path.isfile(os.path.join(public_dir, f)) and '-' in f]
     for filename in all_files:
         groups[filename.split('-', 1)[0]].append(filename)
-    
+
     final_families = {}
     for key, file_list in groups.items():
         if len(file_list) < 2:
             continue
-            
+
         # Find the longest common prefix for the group
         strs = sorted(file_list)
         first, last = strs[0], strs[-1]
@@ -61,13 +61,15 @@ def discover_image_families(static_dir):
         if '-' in prefix:
             # This will correctly find "interpretation-cabine" from "interpretation-cabine-"
             family_name = prefix.rsplit('-', 1)[0]
-            
+
+
             # Recalculate files belonging to this more precise family prefix
             family_files = [f for f in file_list if f.startswith(family_name + '-')]
-            
+
             if len(family_files) >= 2:
                 final_families[family_name] = [f"/static/public/{f}" for f in sorted(family_files)]
-    
+
+
     print(f"[IMAGE_DISCOVERY] Automatically discovered families: {list(final_families.keys())}")
     return final_families
 
@@ -154,25 +156,52 @@ def chat():
         response_options = {}
 
         # --- Analyse de la réponse pour les commandes spéciales ---
-        carousel_match = re.search(r'\[carousel:\s*([^]]+)\]', response_content)
+        carousel_match = re.search(r'\[carousel:\s*([^\]]+)\]', response_content)
+
         if carousel_match:
             family_name = carousel_match.group(1).strip()
             # Nettoyer le texte de la réponse
             response_content = response_content.replace(carousel_match.group(0), '').strip()
-            
+
             if family_name in IMAGE_FAMILIES:
                 response_options['carousel_images'] = IMAGE_FAMILIES[family_name]
                 print(f"[API_CHAT] Carousel triggered for family: {family_name}")
             else:
                 # Si la famille demandée par le LLM n'existe pas, on loggue une alerte
                 print(f"[API_CHAT] WARNING: Carousel requested for non-existent family: {family_name}")
-        
+
+
+        # --- Smart Guardrail for "near misses" on carousels ---
+        # If the AI announced a carousel but forgot the tag, we'll try to add it.
+        if not response_options.get('carousel_images') and "carrousel" in response_content.lower():
+            user_message_lower = last_user_message.lower()
+            # This keyword map is specifically for the guardrail
+            guardrail_family_map = {
+                "interpretes": "interprete",
+                "interprete": "interprete",
+                "cabines": "interpretation-cabine",
+                "cabine": "interpretation-cabine",
+                "personnages": "personnage",
+                "personnage": "personnage",
+                "technologie": "technologie-cabine",
+                "webinaire": "webinaire-onu-femmes-crdi",
+                "expériences": "webinaire-onu-femmes-crdi", # Map "experiences" to a relevant carousel
+                "experience": "webinaire-onu-femmes-crdi",
+                "services": "interpretation-cabine" # Map "services" to a relevant carousel
+            }
+            for keyword, family in guardrail_family_map.items():
+                if keyword in user_message_lower and family in IMAGE_FAMILIES:
+                    print(f"[API_CHAT] Smart Guardrail: AI announced a carousel, adding family '{family}' based on user query.")
+                    response_options['carousel_images'] = IMAGE_FAMILIES[family]
+                    break
+
         # --- Analyse de la réponse pour l'émotion ---
-        emotion_match = re.search(r'\[emotion:\s*([^]]+)\]', response_content)
+        emotion_match = re.search(r'\[emotion:\s*([^\]]+)\]', response_content)
         if emotion_match:
             emotion_name = emotion_match.group(1).strip()
             response_content = response_content.replace(emotion_match.group(0), '').strip()
-            
+
+
             emotion_map = {
                 "Salutations": "Salutations",
                 "Reflexion": "Réflexion",
@@ -181,7 +210,7 @@ def chat():
                 "Encouragement": "encouragement",
                 "Orientation vers actions": "Orientation vers actions"
             }
-            
+
             if emotion_name in emotion_map:
                 filename = f"personnage-{emotion_map[emotion_name]}.png"
                 if os.path.isfile(os.path.join(app.static_folder, 'public', filename)):

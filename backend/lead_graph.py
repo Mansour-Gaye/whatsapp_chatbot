@@ -191,7 +191,7 @@ def create_rag_chain(image_families: Dict[str, List[str]] = None):
     """Crée la chaîne RAG avec les documents de Google Drive et les familles d'images."""
     if image_families is None:
         image_families = {}
-    
+
     try:
         loader = DriveLoader()
         documents = loader.load()

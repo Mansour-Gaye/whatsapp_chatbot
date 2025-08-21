@@ -52,7 +52,9 @@ def process_message(message_body: str, phone_number: str) -> str:
 
     current_step = state["step"]
     # Créer une instance de la chaîne RAG pour WhatsApp, sans familles d'images pour les carrousels.
-    current_rag_chain = create_rag_chain({}) 
+
+    current_rag_chain = create_rag_chain({})
+
 
     if current_step == 0:
         state["exchange_count"] += 1

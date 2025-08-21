@@ -592,7 +592,7 @@ function toggleChatbox(forceState) {
                 }
             } else { // Handles leadStep 0 and 2
                 const botResponse = await sendToBackend(); // C'est maintenant un objet
-                
+
                 if (botResponse.status === 'success') {
                     // Passer le texte et les options (qui peuvent inclure le carrousel) à addMessage
                     addMessage(botResponse.response, 'bot', botResponse.options || {});
