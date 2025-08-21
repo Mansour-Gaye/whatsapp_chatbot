@@ -122,6 +122,22 @@ def log_requests(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def log_analytic_event(visitor_id: str, event_type: str, event_value: str):
+    """Logs a single analytic event to the Supabase table."""
+    if not supabase_client or visitor_id == "unknown_visitor":
+        return
+
+    try:
+        event_data = {
+            "visitor_id": visitor_id,
+            "event_type": event_type,
+            "event_value": event_value
+        }
+        supabase_client.table("analytics_events").insert(event_data).execute()
+        print(f"[ANALYTICS] Logged event: {event_type} - {event_value} for {visitor_id}")
+    except Exception as e:
+        print(f"[ANALYTICS] ERROR logging event for {visitor_id}: {e}")
+
 @app.route("/api/chat", methods=["POST"])
 @log_requests
 def chat():
@@ -160,6 +176,7 @@ def chat():
 
         if carousel_match:
             family_name = carousel_match.group(1).strip()
+            log_analytic_event(visitor_id, "carousel", family_name)
             # Nettoyer le texte de la réponse
             response_content = response_content.replace(carousel_match.group(0), '').strip()
 
@@ -192,6 +209,7 @@ def chat():
             for keyword, family in guardrail_family_map.items():
                 if keyword in user_message_lower and family in IMAGE_FAMILIES:
                     print(f"[API_CHAT] Smart Guardrail: AI announced a carousel, adding family '{family}' based on user query.")
+                    log_analytic_event(visitor_id, "carousel", family)
                     response_options['carousel_images'] = IMAGE_FAMILIES[family]
                     break
 
@@ -199,6 +217,7 @@ def chat():
         emotion_match = re.search(r'\[emotion:\s*([^\]]+)\]', response_content)
         if emotion_match:
             emotion_name = emotion_match.group(1).strip()
+            log_analytic_event(visitor_id, "emotion", emotion_name)
             response_content = response_content.replace(emotion_match.group(0), '').strip()
 
 
@@ -218,6 +237,12 @@ def chat():
                     print(f"[API_CHAT] Emotion triggered: {emotion_name}")
                 else:
                     print(f"[API_CHAT] WARNING: Emotion image file not found: {filename}")
+
+        # --- Analyse de la réponse pour les images individuelles ---
+        image_regex = r'\[image:\s*([^\]]+)\]'
+        image_matches = re.findall(image_regex, response_content)
+        for image_name in image_matches:
+            log_analytic_event(visitor_id, "image_tag", image_name.strip())
 
         # --- Log de la conversation dans Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
@@ -250,6 +275,22 @@ def chat():
         import traceback
         traceback.print_exc()
         return jsonify({"status": "error", "response": f"Une erreur interne est survenue: {str(e)}"}), 500
+
+@app.route("/api/track", methods=["POST"])
+@log_requests
+def track_event():
+    data = request.get_json()
+    visitor_id = data.get("visitorId")
+    event_type = data.get("event_type")
+    event_value = data.get("event_value")
+
+    if not all([visitor_id, event_type, event_value]):
+        return jsonify({"status": "error", "message": "Missing required event data"}), 400
+
+    log_analytic_event(visitor_id, event_type, event_value)
+
+    return jsonify({"status": "success"})
+
 
 @app.route("/api/lead", methods=["POST"])
 @log_requests
@@ -397,40 +438,58 @@ def admin_dashboard():
 
 # --- API pour l'interface d'administration ---
 
-@app.route('/api/admin/stats', methods=['GET'])
+@app.route('/api/admin/analytics', methods=['GET'])
 @login_required
-def get_admin_stats():
+def get_admin_analytics():
     try:
-        # 1. Get total number of leads
-        count_response = supabase_client.table("leads").select("*", count='exact').execute()
-        total_leads = count_response.count
+        # --- 1. Conversation Stats ---
+        conv_response = supabase_client.table("conversations").select("visitor_id").execute()
+        all_visitor_ids = [item['visitor_id'] for item in conv_response.data]
 
-        # 2. Get leads from the last 30 days
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-        leads_response = supabase_client.table("leads").select("created_at").gte("created_at", thirty_days_ago.isoformat()).execute()
+        total_conversations = len(set(all_visitor_ids))
+        total_messages = len(all_visitor_ids)
+        avg_messages_per_conversation = round(total_messages / total_conversations, 2) if total_conversations > 0 else 0
 
-        # 3. Process data to group by day
-        leads_by_day = { (datetime.utcnow().date() - timedelta(days=i)).strftime('%Y-%m-%d'): 0 for i in range(30) }
-        for lead in leads_response.data:
-            # Ensure correct parsing of timezone-aware timestamp
-            lead_date_str = lead['created_at'].split('T')[0]
-            if lead_date_str in leads_by_day:
-                leads_by_day[lead_date_str] += 1
+        # --- 2. Lead Stats (from original function) ---
+        leads_count_response = supabase_client.table("leads").select("visitor_id", count='exact').execute()
+        total_leads = leads_count_response.count
 
-        # 4. Format for Chart.js, ensuring correct order
-        sorted_dates = sorted(leads_by_day.keys())
-        labels = [datetime.strptime(d, '%Y-%m-%d').strftime('%d %b') for d in sorted_dates]
-        data = [leads_by_day[d] for d in sorted_dates]
+        # --- 3. Analytics Events Stats ---
+        events_response = supabase_client.table("analytics_events").select("event_type, event_value").execute()
+        events_data = events_response.data
 
-        return jsonify({
-            "total_leads": total_leads,
-            "leads_over_time": {
-                "labels": labels,
-                "data": data
+        # Aggregate counts for each event type
+        event_counts = defaultdict(lambda: defaultdict(int))
+        for event in events_data:
+            event_counts[event['event_type']][event['event_value']] += 1
+
+        def get_top_events(event_type, limit=5):
+            if event_type not in event_counts:
+                return []
+
+            sorted_events = sorted(event_counts[event_type].items(), key=lambda item: item[1], reverse=True)
+            return [{"name": name, "count": count} for name, count in sorted_events[:limit]]
+
+        # --- 4. Assemble Response ---
+        analytics_data = {
+            "summary_stats": {
+                "total_conversations": total_conversations,
+                "total_leads": total_leads,
+                "avg_messages_per_conversation": avg_messages_per_conversation,
+            },
+            "top_events": {
+                "carousels": get_top_events("carousel"),
+                "emotions": get_top_events("emotion"),
+                "image_tags": get_top_events("image_tag"),
+                "quick_reply_clicks": get_top_events("quick_reply_click")
             }
-        })
+        }
+
+        return jsonify(analytics_data)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/leads', methods=['GET'])

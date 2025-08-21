@@ -66,19 +66,55 @@
 
             <!-- Section Accueil -->
             <section id="home-section" class="section-content">
-                <h2 class="text-3xl font-bold mb-6">Tableau de Bord</h2>
-                <!-- Stats cards will go here -->
-                <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                    <!-- Stat Card Example -->
+                <h2 class="text-3xl font-bold mb-6">Tableau de Bord Analytique</h2>
+
+                <!-- Summary Stats -->
+                <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Total Conversations</h3>
+                        <p id="total-conversations" class="text-3xl font-bold mt-2">--</p>
+                    </div>
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Total Leads</h3>
                         <p id="total-leads" class="text-3xl font-bold mt-2">--</p>
                     </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Messages / Conversation</h3>
+                        <p id="avg-messages" class="text-3xl font-bold mt-2">--</p>
+                    </div>
                 </div>
-                <!-- Chart will go here -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                    <h3 class="text-lg font-medium mb-4">Leads des 30 derniers jours</h3>
-                    <canvas id="leads-chart"></canvas>
+
+                <!-- Top Events -->
+                <h3 class="text-2xl font-bold mb-4">Top 5 Événements</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    <!-- Top Carousels -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h4 class="text-lg font-medium mb-3">Carrousels les plus utilisés</h4>
+                        <ul id="top-carousels-list" class="space-y-2">
+                            <!-- JS will populate this -->
+                        </ul>
+                    </div>
+                    <!-- Top Emotions -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h4 class="text-lg font-medium mb-3">Émotions les plus affichées</h4>
+                        <ul id="top-emotions-list" class="space-y-2">
+                            <!-- JS will populate this -->
+                        </ul>
+                    </div>
+                    <!-- Top Image Tags -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h4 class="text-lg font-medium mb-3">Images les plus utilisées</h4>
+                        <ul id="top-images-list" class="space-y-2">
+                           <!-- JS will populate this -->
+                        </ul>
+                    </div>
+                    <!-- Top Quick Replies -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                        <h4 class="text-lg font-medium mb-3">Réponses rapides les plus cliquées</h4>
+                        <ul id="top-quick-replies-list" class="space-y-2">
+                            <!-- JS will populate this -->
+                        </ul>
+                    </div>
                 </div>
             </section>
 
