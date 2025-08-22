@@ -21,7 +21,7 @@ try:
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, SystemMessage, create_rag_chain = None, None, None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, create_rag_chain = None, None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
@@ -79,43 +79,11 @@ with app.app_context():
 # --- End Image Family Discovery ---
 
 
-# --- Emotion Discovery ---
-def discover_emotions(static_dir):
-    """
-    Automatically discovers emotion images by scanning for 'personnage-*' with any common image extension.
-    Returns a map of emotion names to their web paths.
-    """
-    public_dir = os.path.join(static_dir, 'public')
-    if not os.path.exists(public_dir):
-        print(f"[EMOTION_DISCOVERY] Directory not found: {public_dir}")
-        return {}
-
-    emotion_map = {}
-    prefix = "personnage-"
-    valid_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-
-    for filename in os.listdir(public_dir):
-        if filename.startswith(prefix):
-            name, ext = os.path.splitext(filename)
-            if ext.lower() in valid_extensions:
-                emotion_name = name[len(prefix):]
-                if emotion_name: # Ensure it's not an empty string
-                    emotion_map[emotion_name] = f"/static/public/{filename}"
-
-    print(f"[EMOTION_DISCOVERY] Automatically discovered emotions: {list(emotion_map.keys())}")
-    return emotion_map
-
-EMOTION_MAP = {} # Initialize as global
-with app.app_context():
-    EMOTION_MAP = discover_emotions(app.static_folder)
-# --- End Emotion Discovery ---
-
-
 # --- RAG Chain Initialization ---
 RAG_CHAIN = None
 if LEAD_GRAPH_FOR_APP_IMPORTED:
     print("[APP_INIT] Initializing RAG chain...")
-    RAG_CHAIN = create_rag_chain(image_families=IMAGE_FAMILIES, available_emotions=EMOTION_MAP)
+    RAG_CHAIN = create_rag_chain(IMAGE_FAMILIES)
     if RAG_CHAIN:
         print("[APP_INIT] RAG chain initialized successfully.")
     else:
@@ -170,21 +138,6 @@ def log_analytic_event(visitor_id: str, event_type: str, event_value: str):
     except Exception as e:
         print(f"[ANALYTICS] ERROR logging event for {visitor_id}: {e}")
 
-def manage_history_for_speed(history: list) -> list:
-    """
-    Manages conversation history for speed by truncating it if it gets too long.
-    This is a "sliding window" approach.
-    """
-    MAX_MESSAGES = 10  # Trigger truncation if history exceeds this many messages
-    MESSAGES_TO_KEEP = 8   # When truncating, keep the last N messages
-
-    if len(history) > MAX_MESSAGES:
-        print(f"[HISTORY_MANAGEMENT] History has {len(history)} messages. Truncating to keep the last {MESSAGES_TO_KEEP}.")
-        return history[-MESSAGES_TO_KEEP:]
-
-    return history
-
-
 @app.route("/api/chat", methods=["POST"])
 @log_requests
 def chat():
@@ -207,13 +160,9 @@ def chat():
             elif msg.get("role") in ["assistant", "bot"]:
                 langchain_history.append(AIMessage(content=msg.get("content")))
 
-        # --- GESTION DE L'HISTORIQUE (OPTIMISÉ POUR LA VITESSE) ---
-        langchain_history = manage_history_for_speed(langchain_history)
-        # --- FIN DE LA GESTION DE L'HISTORIQUE ---
-
         last_user_message = client_history[-1]["content"]
 
-        # Invoquer la chaîne RAG de manière synchrone pour le débogage
+        # Invoquer la chaîne RAG
         response_message = RAG_CHAIN.invoke({
             "question": last_user_message,
             "history": langchain_history
@@ -241,8 +190,7 @@ def chat():
 
         # --- Smart Guardrail for "near misses" on carousels ---
         # If the AI announced a carousel but forgot the tag, we'll try to add it.
-        guardrail_triggers = ["carrousel", "voici les images", "voici des photos", "galerie d'images", "quelques exemples en image"]
-        if not response_options.get('carousel_images') and any(trigger in response_content.lower() for trigger in guardrail_triggers):
+        if not response_options.get('carousel_images') and "carrousel" in response_content.lower():
             user_message_lower = last_user_message.lower()
             # This keyword map is specifically for the guardrail
             guardrail_family_map = {
@@ -273,14 +221,22 @@ def chat():
             response_content = response_content.replace(emotion_match.group(0), '').strip()
 
 
-            # Use the dynamically discovered EMOTION_MAP
-            if emotion_name in EMOTION_MAP:
-                response_options['emotion_image'] = EMOTION_MAP[emotion_name]
-                print(f"[API_CHAT] Emotion triggered: {emotion_name}")
-            else:
-                # This case is now more important, as the LLM might hallucinate an emotion
-                # that doesn't exist as a file.
-                print(f"[API_CHAT] WARNING: Emotion '{emotion_name}' requested by LLM but not found in discovered files.")
+            emotion_map = {
+                "Salutations": "Salutations",
+                "Reflexion": "Réflexion",
+                "Incomprehension": "Incompréhension",
+                "Support": "Support",
+                "Encouragement": "encouragement",
+                "Orientation vers actions": "Orientation vers actions"
+            }
+
+            if emotion_name in emotion_map:
+                filename = f"personnage-{emotion_map[emotion_name]}.png"
+                if os.path.isfile(os.path.join(app.static_folder, 'public', filename)):
+                    response_options['emotion_image'] = f"/static/public/{filename}"
+                    print(f"[API_CHAT] Emotion triggered: {emotion_name}")
+                else:
+                    print(f"[API_CHAT] WARNING: Emotion image file not found: {filename}")
 
         # --- Analyse de la réponse pour les images individuelles ---
         image_regex = r'\[image:\s*([^\]]+)\]'

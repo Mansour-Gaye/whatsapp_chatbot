@@ -719,17 +719,21 @@ body {
 }
 
 .emotion-header {
-    height: 80px;
     width: 100%;
-    overflow: hidden;
+    padding: 10px 10px 0 10px; /* Add some space around the image */
     border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .emotion-header img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 20%; /* Se concentre sur le haut de l'image */
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 150px; /* Set a maximum height for the emotion image */
+    object-fit: contain; /* Ensure the whole image is visible and maintains aspect ratio */
+    border-radius: 8px; /* Give the image itself slightly rounded corners */
 }
 
 /* Rétablir le padding pour les autres contenus de la bulle */
