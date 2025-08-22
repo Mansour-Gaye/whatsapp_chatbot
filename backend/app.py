@@ -21,7 +21,7 @@ try:
 except ImportError as e:
     print(f"[APP_INIT] ERROR importing modules: {e}. API routes might fail.")
     LEAD_GRAPH_FOR_APP_IMPORTED = False
-    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, create_rag_chain = None, None, None, None, None, None, None
+    structured_llm, save_lead, llm, Lead, HumanMessage, AIMessage, SystemMessage, create_rag_chain = None, None, None, None, None, None, None, None
 
 app = Flask(__name__)
 CORS(app)
@@ -138,6 +138,21 @@ def log_analytic_event(visitor_id: str, event_type: str, event_value: str):
     except Exception as e:
         print(f"[ANALYTICS] ERROR logging event for {visitor_id}: {e}")
 
+def manage_history_for_speed(history: list) -> list:
+    """
+    Manages conversation history for speed by truncating it if it gets too long.
+    This is a "sliding window" approach.
+    """
+    MAX_MESSAGES = 10  # Trigger truncation if history exceeds this many messages
+    MESSAGES_TO_KEEP = 8   # When truncating, keep the last N messages
+
+    if len(history) > MAX_MESSAGES:
+        print(f"[HISTORY_MANAGEMENT] History has {len(history)} messages. Truncating to keep the last {MESSAGES_TO_KEEP}.")
+        return history[-MESSAGES_TO_KEEP:]
+    
+    return history
+
+
 @app.route("/api/chat", methods=["POST"])
 @log_requests
 def chat():
@@ -160,9 +175,13 @@ def chat():
             elif msg.get("role") in ["assistant", "bot"]:
                 langchain_history.append(AIMessage(content=msg.get("content")))
 
+        # --- GESTION DE L'HISTORIQUE (OPTIMISÉ POUR LA VITESSE) ---
+        langchain_history = manage_history_for_speed(langchain_history)
+        # --- FIN DE LA GESTION DE L'HISTORIQUE ---
+
         last_user_message = client_history[-1]["content"]
 
-        # Invoquer la chaîne RAG
+        # Invoquer la chaîne RAG de manière synchrone pour le débogage
         response_message = RAG_CHAIN.invoke({
             "question": last_user_message,
             "history": langchain_history
@@ -190,7 +209,8 @@ def chat():
 
         # --- Smart Guardrail for "near misses" on carousels ---
         # If the AI announced a carousel but forgot the tag, we'll try to add it.
-        if not response_options.get('carousel_images') and "carrousel" in response_content.lower():
+        guardrail_triggers = ["carrousel", "voici les images", "voici des photos", "galerie d'images", "quelques exemples en image"]
+        if not response_options.get('carousel_images') and any(trigger in response_content.lower() for trigger in guardrail_triggers):
             user_message_lower = last_user_message.lower()
             # This keyword map is specifically for the guardrail
             guardrail_family_map = {

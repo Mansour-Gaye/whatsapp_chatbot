@@ -25,10 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalConversationsEl = document.getElementById('total-conversations');
     const totalLeadsEl = document.getElementById('total-leads');
     const avgMessagesEl = document.getElementById('avg-messages');
-    const topCarouselsList = document.getElementById('top-carousels-list');
-    const topEmotionsList = document.getElementById('top-emotions-list');
-    const topImagesList = document.getElementById('top-images-list');
-    const topQuickRepliesList = document.getElementById('top-quick-replies-list');
+    const topCarouselsChartCanvas = document.getElementById('top-carousels-chart');
+    const topEmotionsChartCanvas = document.getElementById('top-emotions-chart');
+    const topImagesChartCanvas = document.getElementById('top-images-chart');
+    const topQuickRepliesChartCanvas = document.getElementById('top-quick-replies-chart');
 
     // Modals
     const conversationModal = document.getElementById('conversation-modal');
@@ -110,21 +110,84 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const populateTopList = (element, items, placeholder = 'Aucune donnée') => {
-        element.innerHTML = '';
+    const createHorizontalBarChart = (canvas, items) => {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
         if (!items || items.length === 0) {
-            element.innerHTML = `<li class="text-gray-500 italic">${placeholder}</li>`;
+            canvas.style.display = 'none';
+            const placeholder = document.createElement('p');
+            placeholder.className = 'text-gray-500 italic text-center py-8';
+            placeholder.textContent = 'Aucune donnée à afficher';
+            canvas.parentNode.appendChild(placeholder);
             return;
         }
-        items.forEach(item => {
-            const li = document.createElement('li');
-            li.className = 'flex justify-between items-center text-sm';
-            li.innerHTML = `
-                <span class="truncate pr-2">${item.name}</span>
-                <span class="font-bold bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5 text-xs">${item.count}</span>
-            `;
-            element.appendChild(li);
+        
+        const labels = items.map(item => item.name);
+        const data = items.map(item => item.count);
+
+        const colors = ['#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f1c40f'];
+        const backgroundColors = labels.map((_, i) => colors[i % colors.length] + '80'); // Add alpha
+        const borderColors = labels.map((_, i) => colors[i % colors.length]);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Nombre d\'utilisations',
+                    data: data,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#2c3e50',
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 12 },
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#4b5563',
+                            precision: 0
+                        }
+                    },
+                    y: {
+                        ticks: {
+                             color: document.documentElement.classList.contains('dark') ? '#e5e7eb' : '#4b5563'
+                        }
+                    }
+                }
+            }
         });
+    };
+
+    const animateCountUp = (element, endValue) => {
+        if (!element) return;
+        const duration = 1500; // 1.5 seconds
+        const frameRate = 1000 / 60; // 60fps
+        const totalFrames = Math.round(duration / frameRate);
+        let frame = 0;
+        const counter = setInterval(() => {
+            frame++;
+            const progress = frame / totalFrames;
+            const current = Math.round(endValue * progress);
+            element.textContent = current;
+
+            if (frame === totalFrames) {
+                clearInterval(counter);
+                element.textContent = endValue; // Ensure it ends on the exact value
+            }
+        }, frameRate);
     };
 
     // --- MODAL & FORM HANDLERS ---
@@ -216,20 +279,23 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [analyticsRes, leadsRes] = await Promise.all([fetch('/api/admin/analytics'), fetch('/api/admin/leads')]);
             if (!analyticsRes.ok || !leadsRes.ok) throw new Error('Échec du chargement des données initiales');
-
+            
             const analyticsData = await analyticsRes.json();
             const leadsData = await leadsRes.json();
-
-            // Populate summary stats
-            totalConversationsEl.textContent = analyticsData.summary_stats.total_conversations;
-            totalLeadsEl.textContent = analyticsData.summary_stats.total_leads;
+            
+            // Populate summary stats with animation
+            animateCountUp(totalConversationsEl, analyticsData.summary_stats.total_conversations);
+            animateCountUp(totalLeadsEl, analyticsData.summary_stats.total_leads);
+            // For float values, we can adapt the animation or just set it directly
             avgMessagesEl.textContent = analyticsData.summary_stats.avg_messages_per_conversation;
 
-            // Populate top event lists
-            populateTopList(topCarouselsList, analyticsData.top_events.carousels);
-            populateTopList(topEmotionsList, analyticsData.top_events.emotions);
-            populateTopList(topImagesList, analyticsData.top_events.image_tags);
-            populateTopList(topQuickRepliesList, analyticsData.top_events.quick_reply_clicks);
+
+            // Create charts
+            createHorizontalBarChart(topCarouselsChartCanvas, analyticsData.top_events.carousels);
+            createHorizontalBarChart(topEmotionsChartCanvas, analyticsData.top_events.emotions);
+            createHorizontalBarChart(topImagesChartCanvas, analyticsData.top_events.image_tags);
+            createHorizontalBarChart(topQuickRepliesChartCanvas, analyticsData.top_events.quick_reply_clicks);
+
 
             // Populate leads table
             state.allLeads = leadsData;

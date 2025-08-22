@@ -27,6 +27,13 @@
         .dark .sortable:hover {
             background-color: #374151;
         }
+        .stat-card {
+            transition: all 0.3s ease-in-out;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/feather-icons"></script>
@@ -67,53 +74,45 @@
             <!-- Section Accueil -->
             <section id="home-section" class="section-content">
                 <h2 class="text-3xl font-bold mb-6">Tableau de Bord Analytique</h2>
-
+                
                 <!-- Summary Stats -->
                 <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Total Conversations</h3>
-                        <p id="total-conversations" class="text-3xl font-bold mt-2">--</p>
+                        <p id="total-conversations" class="text-3xl font-bold mt-2">0</p>
                     </div>
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Total Leads</h3>
-                        <p id="total-leads" class="text-3xl font-bold mt-2">--</p>
+                        <p id="total-leads" class="text-3xl font-bold mt-2">0</p>
                     </div>
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h3 class="text-lg font-medium text-gray-500 dark:text-gray-400">Messages / Conversation</h3>
-                        <p id="avg-messages" class="text-3xl font-bold mt-2">--</p>
+                        <p id="avg-messages" class="text-3xl font-bold mt-2">0</p>
                     </div>
                 </div>
 
-                <!-- Top Events -->
+                <!-- Top Events Charts -->
                 <h3 class="text-2xl font-bold mb-4">Top 5 Événements</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <!-- Top Carousels -->
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h4 class="text-lg font-medium mb-3">Carrousels les plus utilisés</h4>
-                        <ul id="top-carousels-list" class="space-y-2">
-                            <!-- JS will populate this -->
-                        </ul>
+                        <canvas id="top-carousels-chart"></canvas>
                     </div>
                     <!-- Top Emotions -->
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h4 class="text-lg font-medium mb-3">Émotions les plus affichées</h4>
-                        <ul id="top-emotions-list" class="space-y-2">
-                            <!-- JS will populate this -->
-                        </ul>
+                        <canvas id="top-emotions-chart"></canvas>
                     </div>
                     <!-- Top Image Tags -->
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h4 class="text-lg font-medium mb-3">Images les plus utilisées</h4>
-                        <ul id="top-images-list" class="space-y-2">
-                           <!-- JS will populate this -->
-                        </ul>
+                        <canvas id="top-images-chart"></canvas>
                     </div>
                     <!-- Top Quick Replies -->
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                    <div class="stat-card bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                         <h4 class="text-lg font-medium mb-3">Réponses rapides les plus cliquées</h4>
-                        <ul id="top-quick-replies-list" class="space-y-2">
-                            <!-- JS will populate this -->
-                        </ul>
+                        <canvas id="top-quick-replies-chart"></canvas>
                     </div>
                 </div>
             </section>
