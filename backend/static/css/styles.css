@@ -719,17 +719,17 @@ body {
 }
 
 .emotion-header {
-    height: 80px;
+    height: 90px; /* A fixed banner height */
     width: 100%;
     overflow: hidden;
-    border-radius: 12px 12px 0 0;
+    border-radius: 12px 12px 0 0; /* Match the bubble top corners */
 }
 
 .emotion-header img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: center 20%; /* Se concentre sur le haut de l'image */
+    object-fit: cover; /* Scale to fill the container, cropping excess */
+    object-position: center; /* Center the image within the frame */
 }
 
 /* Rétablir le padding pour les autres contenus de la bulle */
@@ -777,4 +777,15 @@ body {
 #chat-launcher.bottom-left {
   right: auto;
   left: calc(var(--spacing-unit) * 3);
+}
+
+.emotion-badge {
+  background: rgba(79, 70, 229, 0.1);
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+  font-weight: 500;
+  display: inline-block;
 }

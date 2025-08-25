@@ -239,6 +239,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // --- Fin de la Logique de Rendu de l'En-tête d'Émotion ---
 
+        // --- Emotion Parsing Logic ---
+        const emotionRegex = /\[emotion:\s*([^\]]+)\]/g;
+        const emotionMatches = text.match(emotionRegex);
+        
+        if (emotionMatches && sender === 'bot') {
+            emotionMatches.forEach(tag => {
+                const emotionName = tag.replace(emotionRegex, '$1').trim();
+                const emotionBadge = document.createElement('div');
+                emotionBadge.className = 'emotion-badge';
+                emotionBadge.textContent = `💭 ${emotionName}`;
+                messageBubble.appendChild(emotionBadge);
+            });
+            text = text.replace(emotionRegex, '').trim();
+        }
+
         // --- Image Parsing Logic ---
         const imageRegex = /\[image:\s*([^]]+)\]/g;
         const imageMatches = text.match(imageRegex);
