@@ -200,10 +200,6 @@ body {
   font-weight: 600;
 }
 
-.bot .message-content a {
-    color: var(--primary-color);
-}
-
 .message-content strong {
     font-weight: 600;
 }

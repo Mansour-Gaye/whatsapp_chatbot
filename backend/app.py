@@ -2,8 +2,10 @@ import os
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for, Response
 from supabase import create_client, Client
 from flask_cors import CORS
+from groq import InternalServerError
 import csv
 import io
+import json
 import re
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -220,10 +222,12 @@ def chat():
         })
         
         response_content = response_message.content
+        print(f"--- DEBUG: RAW LLM RESPONSE ---\n{response_content}\n------------------------------")
         response_options = {}
 
         # --- Analyse de la réponse pour les commandes spéciales ---
-        carousel_match = re.search(r'\[carousel:\s*([^\]]+)\]', response_content)
+        # Regex améliorée : insensible à la casse, gère les espaces autour de 'carousel' et ':'
+        carousel_match = re.search(r'\[\s*carousel\s*:\s*([^\]]+?)\s*\]', response_content, re.IGNORECASE)
 
         if carousel_match:
             family_name = carousel_match.group(1).strip()
@@ -266,7 +270,8 @@ def chat():
                     break
 
         # --- Analyse de la réponse pour l'émotion ---
-        emotion_match = re.search(r'\[emotion:\s*([^\]]+)\]', response_content)
+        # Regex améliorée : insensible à la casse, gère les espaces autour de 'emotion' et ':'
+        emotion_match = re.search(r'\[\s*emotion\s*:\s*([^\]]+?)\s*\]', response_content, re.IGNORECASE)
         if emotion_match:
             emotion_name = emotion_match.group(1).strip()
             log_analytic_event(visitor_id, "emotion", emotion_name)
@@ -287,6 +292,26 @@ def chat():
         image_matches = re.findall(image_regex, response_content)
         for image_name in image_matches:
             log_analytic_event(visitor_id, "image_tag", image_name.strip())
+
+        # --- Analyse de la réponse pour les Quick Replies ---
+        # Utilise re.DOTALL pour permettre aux quick replies d'être sur plusieurs lignes
+        qr_match = re.search(r'\[\s*quick_replies\s*:\s*(.*?)\]', response_content, re.IGNORECASE | re.DOTALL)
+        if qr_match:
+            # Le contenu est une liste de chaînes de caractères entre guillemets, séparées par des virgules
+            qr_content = qr_match.group(1).strip()
+            # Pour l'analyser en toute sécurité, nous l'enveloppons dans des crochets pour en faire un tableau JSON valide
+            json_array_string = f"[{qr_content}]"
+            try:
+                quick_replies_list = json.loads(json_array_string)
+                # S'assurer que le résultat est bien une liste
+                if isinstance(quick_replies_list, list):
+                    response_options['quickReplies'] = quick_replies_list
+                    print(f"[API_CHAT] Quick replies déclenchés: {quick_replies_list}")
+            except json.JSONDecodeError:
+                print(f"[API_CHAT] AVERTISSEMENT: Échec de l'analyse du JSON des quick replies: {json_array_string}")
+
+            # Nettoyer le texte de la réponse
+            response_content = response_content.replace(qr_match.group(0), '').strip()
 
         # --- Log de la conversation dans Supabase ---
         if supabase_client and visitor_id != "unknown_visitor":
@@ -313,6 +338,14 @@ def chat():
 
         return jsonify({"status": "success", "response": response_content, "options": response_options})
 
+    except InternalServerError as e:
+        print(f"[API_CHAT] CRITICAL: Groq API Internal Server Error: {e}")
+        # Retourner une réponse conviviale pour l'utilisateur, mais avec un statut de succès pour que le frontend la traite comme un message normal.
+        return jsonify({
+            "status": "success",
+            "response": "Je suis désolé, une erreur technique est survenue de mon côté. Pourriez-vous reformuler votre question ou la poser un peu plus tard ?",
+            "options": {}
+        })
     except Exception as e:
         print(f"[API_CHAT] Erreur dans /api/chat: {str(e)}")
         # Ajout du traceback pour un meilleur débogage

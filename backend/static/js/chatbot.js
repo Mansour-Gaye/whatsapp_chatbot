@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
             botAvatar: '/static/img/cultural-nuance.png'
         },
         welcomeMessage: 'Bonjour ! Comment puis-je vous aider aujourd\'hui ?',
-        initialQuickReplies: ['Info produit', 'Support technique', 'Autre question']
+        initialQuickReplies: ["Quels sont vos services d'interprétation ?", "Comment obtenir un devis de traduction ?", "Parlez-moi de votre expérience."]
         };
     
     // L'appel à init() sera déplacé à la fin du fichier
